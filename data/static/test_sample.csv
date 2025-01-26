@@ -1,3 +1,0 @@
-ex_id,dataset_id,user_id,time,model,geography,languages,Turn 0,Turn 1,Turn 2,Turn 3,Turn 4,Turn 5
-lmsys1m_894e6b9e475f429db5448d064bd2d839,lmsys1m_,,,vicuna-13b,,English,Hello Who are you?,I am an AI assistant.,,,,
-lmsys1m_894e6b9e475f429db5448d064bd2d840,lmsys1m_,,,vicuna-13b,,Chinese,你是谁？,听说你是个谁？,,,,

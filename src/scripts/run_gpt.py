@@ -26,22 +26,27 @@ async def process_batch(gpt_instance, batch):
     return [
         {
             "input": prompt, 
-            "response": response.replace("```", "").replace("json", "").replace("\n", "")
+            "response": response
         }
         for prompt, response in zip(batch, responses)
     ]
 
-def extract_samples_and_metadata(dataframe, system_level_id):
+def valid_turn(text):
+    return pd.notna(text) and text.strip() != ""
+
+def extract_samples_and_metadata(dataframe, system_level_id, system_prompt_template):
     sample, metadata = [], []
+
+    turn_columns = [col for col in dataframe.columns if col.startswith("Turn ")]
+    max_turns = len(turn_columns)
+
     level_map = {
-        "conversation": lambda row: " ".join(
-            row[f"Turn {i}"] for i in range(6) if pd.notna(row[f"Turn {i}"])
-        ),
-        "prompt": lambda row: [row[f"Turn {i}"] for i in [0, 2, 4] if pd.notna(row[f"Turn {i}"])],
-        "response": lambda row: [row[f"Turn {i}"] for i in [1, 3, 5] if pd.notna(row[f"Turn {i}"])],
+        "conversation": lambda row: [" ".join(row[f"Turn {i}"] for i in range(max_turns) if valid_turn(row.get(f"Turn {i}", "")))],
+        "prompt": lambda row: [row[f"Turn {i}"] for i in range(0, max_turns, 2) if valid_turn(row.get(f"Turn {i}", ""))],
+        "response": lambda row: [row[f"Turn {i}"] for i in range(1, max_turns, 2) if valid_turn(row.get(f"Turn {i}", ""))],
         "turn": lambda row: [
-            f"{row[f'Turn {i}']} {row[f'Turn {i+1}']}" for i in range(5)
-            if pd.notna(row[f"Turn {i}"]) and pd.notna(row[f"Turn {i+1}"])
+            f"{row[f'Turn {i}']} {row[f'Turn {i+1}']}" for i in range(max_turns - 1)
+            if valid_turn(row.get(f"Turn {i}", "")) and valid_turn(row.get(f"Turn {i+1}", ""))
         ]
     }
 
@@ -49,18 +54,18 @@ def extract_samples_and_metadata(dataframe, system_level_id):
         raise ValueError("Invalid system_level_id. Must be one of: conversation, prompt, response, turn.")
 
     extractor = level_map[system_level_id]
+
     for _, row in dataframe.iterrows():
-        data = extractor(row)
-        if isinstance(data, list):
-            for item in data:
-                sample.append(item)
-                metadata.append({
-                    "ex_id": row["ex_id"],
-                    "dataset_id": row["dataset_id"],
-                    "model": row["model"]
-                })
-        elif data:
-            sample.append(data)
+        data_list = extractor(row)
+        for data in data_list:
+            # Add more placeholders if needed (e.g., "{outputformat}":"JSON")
+            placeholders = {"{text}": data}
+            formatted_prompt = system_prompt_template
+
+            for placeholder, value in placeholders.items():
+                formatted_prompt = formatted_prompt.replace(placeholder, value)
+
+            sample.append(formatted_prompt)
             metadata.append({
                 "ex_id": row["ex_id"],
                 "dataset_id": row["dataset_id"],
@@ -69,35 +74,38 @@ def extract_samples_and_metadata(dataframe, system_level_id):
     return sample, metadata
 
 async def run_gpt(
-    system_level_id,
     system_prompt_id,
+    model_id,
     input_fpath,
     save_fpath,
     batch_size=20,
 ):
     try:
-        system_prompt = io.read_json(constants.SYSTEM_PROMPTS_FPATH)[system_level_id][system_prompt_id]
-        # system_prompt = io.read_json(constants.DETAILED_SYSTEM_PROMPTS_FPATH)[system_level_id][system_prompt_id]
+        system_level = system_prompt_id.split("_")[-1]
+        system_prompt = "_".join(system_prompt_id.split("_")[:-1])
+        system_prompt_template = io.read_json(constants.SYSTEM_PROMPTS_FPATH)[system_level][system_prompt]
+        # system_prompt = io.read_json(constants.DETAILED_SYSTEM_PROMPTS_FPATH)[system_level][system_prompt]
     except KeyError:
         print("Please choose an existing level-prompt pair from data/system_prompts.json.")
         return
     
-    dataframe = pd.read_csv(input_fpath)
-    sample, metadata = extract_samples_and_metadata(dataframe, system_level_id)
+    dataframe = pd.read_json(input_fpath, orient="records")
+    formatted_prompts, metadata = extract_samples_and_metadata(dataframe, system_level, system_prompt_template)
 
-    gpt_instance = gpt.GPT(model="gpt-4o", prompt=system_prompt)
+    gpt_instance = gpt.GPT(model=model_id, prompt=system_prompt_template)
+    print(gpt_instance)
     all_responses = []
     
-    for batch, meta_batch in zip(batch_generator(sample, batch_size), batch_generator(metadata, batch_size)):
-        formatted_prompts = [
-            system_prompt.replace("{text}", item) for item in batch
-        ]
-        batch_responses = await process_batch(gpt_instance, formatted_prompts)
+    for batch, meta_batch in zip(batch_generator(formatted_prompts, batch_size), batch_generator(metadata, batch_size)):
+        print(f"Processing batch: {batch}")
+        batch_responses = await process_batch(gpt_instance, batch)
+        print(f"Batch Responses: {batch_responses}")
         for response, meta in zip(batch_responses, meta_batch):
+            print(f"Response: {response}, Metadata: {meta}")
             all_responses.append({
                 **meta,
-                "system_level_id": system_level_id,
-                "system_prompt_id": system_prompt_id,
+                "system_level_id": system_level,
+                "system_prompt_id": system_prompt,
                 "input": response["input"],
                 "response": response["response"]
             })
@@ -111,19 +119,20 @@ if __name__ == "__main__":
         "--input",
         type=str,
         default=None,
-        help="Path to the sample csv file."
-    )
-    parser.add_argument(
-        "--system_level_id",
-        type=str,
-        default=None,
-        help='Choose a level from: conversation, prompt, response, turn.',
+        help="Path to the sample json file."
     )
     parser.add_argument(
         "--system_prompt_id",
         type=str,
         default=None,
-        help='Choose from system prompt keys in data/system_prompts.json.',
+        help='Choose from system prompt keys in data/system_prompts.json and a level (conversation, prompt, response, turn) (i.e. self_disclosure_conversation).',
+    )
+    parser.add_argument(
+        "--model_id",
+        type=str,
+        default=None,
+        choices=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
+        help='Specify the GPT model to use from the following options: gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-3.5-turbo.',
     )
     parser.add_argument(
         "--save",
@@ -134,10 +143,11 @@ if __name__ == "__main__":
 
 
     args = parser.parse_args()
+    print(args.model_id)
 
     asyncio.run(run_gpt(
-        args.system_level_id,
         args.system_prompt_id,
+        args.model_id,
         args.input,
         args.save,
     ))
