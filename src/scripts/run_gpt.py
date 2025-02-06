@@ -21,15 +21,18 @@ def batch_generator(data_list, batch_size):
         yield data_list[i:i + batch_size]
 
 async def process_batch(gpt_instance, batch):
-    """Processes a single batch of prompts asynchronously."""
-    responses = await gpt_instance.process_prompts_in_batches_async(batch)
-    return [
-        {
-            "input": prompt, 
-            "response": response
-        }
-        for prompt, response in zip(batch, responses)
-    ]
+    try:
+        responses = await gpt_instance.process_prompts_in_batches_async(batch)
+        return [
+            {
+                "input": prompt, 
+                "response": response
+            }
+            for prompt, response in zip(batch, responses)
+        ]
+    except Exception as e:
+        print(f"ERROR: Failed to process batch: {e}")
+        return []
 
 def valid_turn(text):
     return pd.notna(text) and text.strip() != ""
@@ -37,18 +40,16 @@ def valid_turn(text):
 def extract_samples_and_metadata(dataframe, system_level_id, system_prompt_template):
     sample, metadata = [], []
 
-    turn_columns = [col for col in dataframe.columns if col.startswith("Turn ")]
-    max_turns = len(turn_columns)
-
     level_map = {
-        "conversation": lambda row: [" ".join(row[f"Turn {i}"] for i in range(max_turns) if valid_turn(row.get(f"Turn {i}", "")))],
-        "prompt": lambda row: [row[f"Turn {i}"] for i in range(0, max_turns, 2) if valid_turn(row.get(f"Turn {i}", ""))],
-        "response": lambda row: [row[f"Turn {i}"] for i in range(1, max_turns, 2) if valid_turn(row.get(f"Turn {i}", ""))],
-        "turn": lambda row: [
-            f"{row[f'Turn {i}']} {row[f'Turn {i+1}']}" for i in range(max_turns - 1)
-            if valid_turn(row.get(f"Turn {i}", "")) and valid_turn(row.get(f"Turn {i+1}", ""))
-        ]
-    }
+            "conversation": lambda row: [" ".join(turn["text"] for turn in row["conversation"] if valid_turn(turn["text"]))],
+            "prompt": lambda row: [turn["text"] for turn in row["conversation"] if turn["role"] == "user" and valid_turn(turn["text"])],
+            "response": lambda row: [turn["text"] for turn in row["conversation"] if turn["role"] == "assistant" and valid_turn(turn["text"])],
+            "turn": lambda row: [
+                f"{row['conversation'][i]['text']} {row['conversation'][i+1]['text']}"
+                for i in range(len(row['conversation']) - 1)
+                if valid_turn(row['conversation'][i]['text']) and valid_turn(row['conversation'][i+1]['text'])
+            ]
+        }
 
     if system_level_id not in level_map:
         raise ValueError("Invalid system_level_id. Must be one of: conversation, prompt, response, turn.")
@@ -93,15 +94,11 @@ async def run_gpt(
     formatted_prompts, metadata = extract_samples_and_metadata(dataframe, system_level, system_prompt_template)
 
     gpt_instance = gpt.GPT(model=model_id, prompt=system_prompt_template)
-    print(gpt_instance)
     all_responses = []
     
     for batch, meta_batch in zip(batch_generator(formatted_prompts, batch_size), batch_generator(metadata, batch_size)):
-        print(f"Processing batch: {batch}")
         batch_responses = await process_batch(gpt_instance, batch)
-        print(f"Batch Responses: {batch_responses}")
         for response, meta in zip(batch_responses, meta_batch):
-            print(f"Response: {response}, Metadata: {meta}")
             all_responses.append({
                 **meta,
                 "system_level_id": system_level,
@@ -109,6 +106,7 @@ async def run_gpt(
                 "input": response["input"],
                 "response": response["response"]
             })
+            print(response)
     io.write_jsonl(all_responses, save_fpath)
 
 
@@ -130,7 +128,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model_id",
         type=str,
-        default=None,
+        default="gpt-4o",
         choices=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
         help='Specify the GPT model to use from the following options: gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-3.5-turbo.',
     )
@@ -141,9 +139,7 @@ if __name__ == "__main__":
         help='Save path.',
     )
 
-
     args = parser.parse_args()
-    print(args.model_id)
 
     asyncio.run(run_gpt(
         args.system_prompt_id,
