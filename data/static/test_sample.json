@@ -1,4 +1,31 @@
 [
-    "Why is the sky blue?",
-    "What are the primary colors?"
+    {
+        "ex_id": "lmsys1m_894e6b9e475f429db5448d064bd2d839",
+        "dataset_id": "lmsys1m_",
+        "user_id": "u_00",
+        "time": "",
+        "model": "vicuna-13b",
+        "geography": "",
+        "languages": "English",
+        "Turn 0": "Hello Who are you?",
+        "Turn 1": "I am an AI assistant.",
+        "Turn 2": "",
+        "Turn 3": "",
+        "Turn 4": "",
+        "Turn 5": "",
+        "Turn 6": ""
+    },
+    {
+        "ex_id": "lmsys1m_894e6b9e475f429db5448d064bd2d840",
+        "dataset_id": "lmsys1m_",
+        "user_id": "u_01",
+        "time": "",
+        "model": "llama-3-8b",
+        "geography": "",
+        "languages": "Chinese",
+        "Turn 0": "你是谁？",
+        "Turn 1": "听说你是个谁？",
+        "Turn 2": "你能告诉我你的需求吗？",
+        "Turn 3": "你能帮我做什么？"
+    }
 ]
