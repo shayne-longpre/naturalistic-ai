@@ -106,7 +106,7 @@ def process_csv_into_conversations(path):
             user_id=row["user_id"],
             time=row["time"],
             model=row["model"],
-            conversation=conversation,
+            conversation=conv_unpacked,
             geography=row["geography"],
             languages=row["languages"]
         )
