@@ -123,10 +123,75 @@ def download_sharegpt_v1():
     return [process_data(datum) for datum in full_dset] 
 
 
+# Download ChatBotArena 
+def download_chatbot_arena():
+    dset = io.huggingface_download("lmsys/chatbot_arena_conversations", split="train")
+
+    from datetime import datetime
+
+    def add_turn_and_rename_keys(conv:list[object]):
+        turn_count = 0
+        conv_with_turn = []
+        for statement in conv:
+            statement["turn"] = turn_count
+            statement["text"] = statement.pop("content")
+            if statement["role"] == "assistant":
+                turn_count = turn_count+1
+            conv_with_turn.append(statement)
+        return conv_with_turn
+
+    def process_data(datum):
+        state = datum.get('state')
+        country = f"{datum.get('country', 'Unknown')}"
+        timestamp = datum.get('tstamp')
+
+        # Chatbot Arena contains pairs of conversations
+        conv_a = datum.get("conversation_a")
+        conv_b = datum.get("conversation_b")
+
+        conv_a_reformatted = add_turn_and_rename_keys(conv_a)
+        conv_b_reformatted = add_turn_and_rename_keys(conv_b)
+        
+        conversation_a = Conversation(
+            ex_id="chatbot_arena_" + datum.get('question_id') + "_a",
+            dataset_id="chatbot_arena",
+            user_id=datum.get('judge'),
+            time=timestamp.isoformat() if isinstance(timestamp, datetime) else None,
+            model=datum.get('model_a'),
+            conversation=conv_a_reformatted,
+            geography=country if state is None else f"{country}; {state}",
+            languages=datum.get("language")
+        )
+        
+        conversation_b = Conversation(
+            ex_id="chatbot_arena_" + datum.get('question_id') + "_b",
+            dataset_id="chatbot_arena",
+            user_id=datum.get('judge'),
+            time=timestamp.isoformat() if isinstance(timestamp, datetime) else None,
+            model=datum.get('model_b'),
+            conversation=conv_b_reformatted,
+            geography=country if state is None else f"{country}; {state}",
+            languages=datum.get("language")
+        )
+
+        return conversation_a, conversation_b 
+    
+    conversations_to_return = []
+    
+    for datum in dset: 
+        conv_a, conv_b = process_data(datum)
+        conversations_to_return.append(conv_a)
+        conversations_to_return.append(conv_b)
+    
+    return conversations_to_return
+
+
+
 DOWNLOAD_FUNCTIONS = {
     "wildchat_v1": download_wildchat_v1,
     "lmsys_1m": download_lmsys_1m,
     "sharegpt_v1": download_sharegpt_v1,
+    "chatbot_arena": download_chatbot_arena
 }
 
 
