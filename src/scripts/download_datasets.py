@@ -9,54 +9,17 @@ from huggingface_hub import hf_hub_download
 
 sys.path.append("./")
 sys.path.append("src/")
+from dataset_utils import Conversation
 
 from helpers import constants
 from helpers import io
 
-
-class Conversation(object):
-    """A conversation object, with all metadata."""
-
-    def __init__(
-        self,
-        ex_id,
-        dataset_id,
-        user_id,
-        time,
-        model,
-        conversation,
-        geography=None,
-        languages=None,
-    ):
-        self.ex_id = ex_id
-        self.dataset_id = dataset_id
-        self.user_id = user_id
-        self.time = time
-        self.model = model
-        self.conversation = conversation
-        self.geography = geography
-        self.languages = languages
-
-    def to_dict(self, unpack_conversation=False):
-        obj = {
-            "ex_id": self.ex_id,
-            "dataset_id": self.dataset_id,
-            "user_id": self.user_id,
-            "time": self.time,
-            "model": self.model,
-            "geography": self.geography,
-            "languages": self.languages,
-        }
-        if unpack_conversation:
-            for i in range(6):
-                obj[f"Turn {i}"] = self.conversation[i]["text"] if i < len(self.conversation) else ""
-        else:
-            obj["conversation"] = self.conversation
-        return obj
-    
-
+"""
+This file is used to download and format datasets in a common format (list of Conversation objects). To use the datasets, use the 
+"""
 
 def download_lmsys_1m():
+    print("Starting Download for lmsys-chat-1m...")
     # https://huggingface.co/datasets/lmsys/lmsys-chat-1m
     dset = io.huggingface_download('lmsys/lmsys-chat-1m', split='train')
 
@@ -160,37 +123,47 @@ def download_sharegpt_v1():
     return [process_data(datum) for datum in full_dset] 
 
 
-DATASETS = {
+DOWNLOAD_FUNCTIONS = {
     "wildchat_v1": download_wildchat_v1,
     "lmsys_1m": download_lmsys_1m,
     "sharegpt_v1": download_sharegpt_v1,
 }
 
-def main(dataset_id, sample, save_fpath):
-    assert dataset_id in DATASETS, f"{dataset_id} not in {DATASETS.keys()}"
-    dset_loader = DATASETS[dataset_id]
+
+def main(dataset_id:str, sample: int, dataset_folder:str, save_path_overwrite: str, dataset_file_type:str = "jsonl"):
+    assert dataset_id in DOWNLOAD_FUNCTIONS, f"{dataset_id} not in {DOWNLOAD_FUNCTIONS.keys()}"
+    assert dataset_file_type in ["json", "jsonl", "csv"], f"{dataset_file_type} is not one of [json, jsonl, csv]."
+
+    dset_loader = DOWNLOAD_FUNCTIONS[dataset_id]
     dset = dset_loader()
+
     if sample:
         dset = random.sample(dset, int(sample))
 
-    if save_fpath.endswith(".jsonl"):
+    if save_path_overwrite: 
+        save_path = save_path_overwrite
+    else: 
+        os.makedirs(f"{dataset_folder}", exist_ok=True)
+        os.makedirs(f"{dataset_folder}/{dataset_id}", exist_ok=True)
+        save_path = f"{dataset_folder}/{dataset_id}/dataset.{dataset_file_type}"
+    
+    if save_path.endswith(".jsonl"):
         dset = [x.to_dict() for x in dset]
-        io.write_jsonl(dset, save_fpath)
-    elif save_fpath.endswith(".csv"):
+        io.write_jsonl(dset, save_path)
+    elif save_path.endswith(".csv"):
         dset_df = pd.DataFrame([x.to_dict(unpack_conversation=True) for x in dset])
-        dset_df.to_csv(save_fpath, index=False)
+        dset_df.to_csv(save_path, index=False)
     else:
-        raise ValueError("Don't recognize this save path extension.")
-
+        raise ValueError(f"Don't recognize this save path extension for the constructed save_path: {save_path}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--dataset",
+        "--dataset_id",
         required=True,
         default=None,
-        help=f"Dataset ID from {DATASETS.keys()}"
+        help=f"Dataset ID from {DOWNLOAD_FUNCTIONS.keys()}"
     )
     parser.add_argument(
         "--sample",
@@ -199,10 +172,16 @@ if __name__ == "__main__":
         help=f"An integer for how many to sample from the dataset."
     )
     parser.add_argument(
-        "--save",
+        "--dataset_folder",
         required=True,
-        default=None,
-        help="Save filepath for dataset."
+        default="../../datasets",
+        help="General 'datasets' folder where you plan to store datasets in. Datasets are saved in {dataset_folder}/{dataset_name}/<actual data files> for consistency."
+    )
+    parser.add_argument(
+        "--save_path_overwrite",
+        required=False,
+        default="",
+        help="By default, Datasets are saved in {dataset_folder}/{dataset_name}/<actual data files> for consistency. To define a specific save path instead, provide the full path here."
     )
     args = parser.parse_args()
-    main(args.dataset, args.sample, args.save)
+    main(args.dataset_id, args.sample, args.dataset_folder, args.save_path_overwrite)
