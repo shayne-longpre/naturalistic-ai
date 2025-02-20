@@ -217,6 +217,37 @@ def download_alpaca_eval():
 
     return [process_data(datum) for datum in dset] 
 
+def download_mmlu():
+    # ['question', 'choices', 'answer'],
+    categories = ['abstract_algebra', 'anatomy', 'astronomy', 'business_ethics', 'clinical_knowledge', 'college_biology', 'college_chemistry', 'college_computer_science', 'college_mathematics', 'college_medicine', 'college_physics', 'computer_security', 'conceptual_physics', 'econometrics', 'electrical_engineering', 'elementary_mathematics', 'formal_logic', 'global_facts', 'high_school_biology', 'high_school_chemistry', 'high_school_computer_science', 'high_school_european_history', 'high_school_geography', 'high_school_government_and_politics', 'high_school_macroeconomics', 'high_school_mathematics', 'high_school_microeconomics', 'high_school_physics', 'high_school_psychology', 'high_school_statistics', 'high_school_us_history', 'high_school_world_history', 'human_aging', 'human_sexuality', 'international_law', 'jurisprudence', 'logical_fallacies', 'machine_learning', 'management', 'marketing', 'medical_genetics', 'miscellaneous', 'moral_disputes', 'moral_scenarios', 'nutrition', 'philosophy', 'prehistory', 'professional_accounting', 'professional_law', 'professional_medicine', 'professional_psychology', 'public_relations', 'security_studies', 'sociology', 'us_foreign_policy', 'virology', 'world_religions']
+
+
+    def process_data(datum):
+            conv = [{
+                    "role": "user",
+                    "turn": 0, 
+                    "text": datum.get("question")
+                    }
+                    ]
+
+            return Conversation(
+                ex_id="mmlu_" + str(uuid.uuid4()),
+                dataset_id="mmlu",
+                user_id=str(uuid.uuid4()),
+                time=None,
+                model=None,
+                conversation=conv,
+                geography="Unknown",
+                languages="English"
+            )
+    
+    conversations_to_return = []
+    for category in categories:
+        dset = load_dataset("tasksource/mmlu", category, token=True)
+        for datum in dset:
+            conversations_to_return.append(process_data(datum))
+    
+    return conversations_to_return
 
 
 DOWNLOAD_FUNCTIONS = {
@@ -224,7 +255,8 @@ DOWNLOAD_FUNCTIONS = {
     "lmsys_1m": download_lmsys_1m,
     "sharegpt_v1": download_sharegpt_v1,
     "chatbot_arena": download_chatbot_arena,
-    "alpaca_eval": download_alpaca_eval
+    "alpaca_eval": download_alpaca_eval,
+    "mmlu": download_mmlu
 }
 
 
