@@ -6,6 +6,7 @@ import pandas as pd
 import random
 from datetime import datetime
 from huggingface_hub import hf_hub_download
+from datasets import load_dataset
 
 sys.path.append("./")
 sys.path.append("src/")
@@ -13,6 +14,7 @@ from dataset_utils import Conversation
 
 from helpers import constants
 from helpers import io
+import uuid
 
 """
 This file is used to download and format datasets in a common format (list of Conversation objects). To use the datasets, use the 
@@ -186,12 +188,43 @@ def download_chatbot_arena():
     return conversations_to_return
 
 
+def download_alpaca_eval():
+    dset = load_dataset("tatsu-lab/alpaca_eval", split = "eval", trust_remote_code=True, token = True) #TODO integrate this with io helpers
+
+    def process_data(datum):
+        conv = [{
+                "role": "user",
+                "turn": 0, 
+                "text": datum.get("instruction")
+                }, {
+                "role": "assistant",
+                "turn": 0, 
+                "text": datum.get("output")
+                }]
+
+        
+        return Conversation(
+            ex_id="alpaca_eval_" + str(uuid.uuid4()),
+            dataset_id="alpaca_eval",
+            user_id=str(uuid.uuid4()),
+            time=None,
+            model=datum.get('generator'),
+            conversation=conv,
+            geography="Unknown",
+            languages="English"
+        )
+        
+
+    return [process_data(datum) for datum in dset] 
+
+
 
 DOWNLOAD_FUNCTIONS = {
     "wildchat_v1": download_wildchat_v1,
     "lmsys_1m": download_lmsys_1m,
     "sharegpt_v1": download_sharegpt_v1,
-    "chatbot_arena": download_chatbot_arena
+    "chatbot_arena": download_chatbot_arena,
+    "alpaca_eval": download_alpaca_eval
 }
 
 
