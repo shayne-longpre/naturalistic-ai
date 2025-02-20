@@ -54,20 +54,14 @@ class Conversation(object):
 
 DATASET_CATEGORIES = {
     ### User Datasets ###
-    "wildchat_v1": "usage",
-    "lmsys_1m": "usage",
-    "sharegpt_v1": "usage",
-    ### Benchmarks ###
-    "mmlu": "benchmark",
-}
-
-DATASET_TYPES = {
-    ### User Datasets ###
     "wildchat_v1": "conversation",
     "lmsys_1m": "conversation",
     "sharegpt_v1": "conversation",
+    
     ### Benchmarks ###
-    "mmlu": "qa",
+    "chatbot_arena": "benchmark",
+    "alpaca_eval": "benchmark",
+    "mmlu": "benchmark"
 }
 
 def process_json_into_conversations(path):
@@ -186,7 +180,7 @@ class Dataset():
     """Dataset class used to define the common features / functions of any evaluation or usage dataset."""
 
     def __init__(self, dataset_id: str, local_path: str = None):
-        assert dataset_id in DATASET_CATEGORIES, f"{dataset_id} not in {DATASET_CATEGORIES.keys()}. Please add it to the DATASET_TYPES Dictionary."
+        assert dataset_id in DATASET_CATEGORIES, f"{dataset_id} not in {DATASET_CATEGORIES.keys()}. Please add it to the DATASET_CATEGORIES Dictionary."
         self.dataset_id:str = dataset_id
         self.category:str = DATASET_CATEGORIES[dataset_id]
         self.data:List[Conversation] = read_data_from_files(dataset_id=dataset_id, local_path = local_path)
