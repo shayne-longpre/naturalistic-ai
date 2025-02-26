@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import random
 from datetime import datetime
+from tqdm import tqdm
 from huggingface_hub import hf_hub_download
 from datasets import load_dataset
 
@@ -17,11 +18,13 @@ from helpers import io
 import uuid
 
 """
-This file is used to download and format datasets in a common format (list of Conversation objects). To use the datasets, use the 
+This file is used to download and format datasets in a common format (list of Conversation objects). 
+To download a script, run something like: "python src/scripts/download_datasets.py --dataset_id=mmlu". 
+See arg description for specifics. 
 """
 
 def download_lmsys_1m():
-    print("Starting Download for lmsys-chat-1m...")
+    print("\nDownloading lmsys-chat-1m...")
     # https://huggingface.co/datasets/lmsys/lmsys-chat-1m
     dset = io.huggingface_download('lmsys/lmsys-chat-1m', split='train')
 
@@ -46,10 +49,12 @@ def download_lmsys_1m():
             languages=datum.get('language', None),
         )
 
-    return [process_data(datum) for datum in dset]
+    print("Processing lmsys-chat-1m into conversation format...")
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing lymsys-chat-1m")]
 
 # Download WildChat
 def download_wildchat_v1():
+    print("Starting Download for WildChat-1M...")
     dset = io.huggingface_download("allenai/WildChat-1M", split="train")
 
     def process_data(datum):
@@ -77,10 +82,11 @@ def download_wildchat_v1():
             languages=None,
         )
     
-    return [process_data(datum) for datum in dset]
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing WildChat")]
 
 # Download ShareGPT
 def download_sharegpt_v1():
+    print("Starting Download for ShareGPT...")
     # unfiltered: https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered
     sharegpt_dir = "anon8231489123/ShareGPT_Vicuna_unfiltered"
     sv_dset_p1 = hf_hub_download(
@@ -122,14 +128,12 @@ def download_sharegpt_v1():
             languages=None,
         )
 
-    return [process_data(datum) for datum in full_dset] 
-
+    return [process_data(datum) for datum in tqdm(full_dset, desc="Processing ShareGPT")] 
 
 # Download ChatBotArena 
 def download_chatbot_arena():
+    print("Starting Download for ChatBotArena...")
     dset = io.huggingface_download("lmsys/chatbot_arena_conversations", split="train")
-
-    from datetime import datetime
 
     def add_turn_and_rename_keys(conv:list[object]):
         turn_count = 0
@@ -180,7 +184,7 @@ def download_chatbot_arena():
     
     conversations_to_return = []
     
-    for datum in dset: 
+    for datum in tqdm(dset, desc="Processing ChatBotArena"): 
         conv_a, conv_b = process_data(datum)
         conversations_to_return.append(conv_a)
         conversations_to_return.append(conv_b)
@@ -189,6 +193,7 @@ def download_chatbot_arena():
 
 # Download Alpaca Eval
 def download_alpaca_eval():
+    print("Starting Download for AlpacaEval..")
     dset = load_dataset("tatsu-lab/alpaca_eval", split = "eval", trust_remote_code=True, token = True) #TODO integrate this with io helpers
 
     def process_data(datum):
@@ -215,10 +220,11 @@ def download_alpaca_eval():
         )
         
 
-    return [process_data(datum) for datum in dset] 
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing AlpacaEval")]
 
 # Download MMLU
 def download_mmlu():
+    print("Starting Download for MMLU...")
     # ['question', 'choices', 'answer'],
     categories = ['abstract_algebra', 'anatomy', 'astronomy', 'business_ethics', 'clinical_knowledge', 'college_biology', 'college_chemistry', 'college_computer_science', 'college_mathematics', 'college_medicine', 'college_physics', 'computer_security', 'conceptual_physics', 'econometrics', 'electrical_engineering', 'elementary_mathematics', 'formal_logic', 'global_facts', 'high_school_biology', 'high_school_chemistry', 'high_school_computer_science', 'high_school_european_history', 'high_school_geography', 'high_school_government_and_politics', 'high_school_macroeconomics', 'high_school_mathematics', 'high_school_microeconomics', 'high_school_physics', 'high_school_psychology', 'high_school_statistics', 'high_school_us_history', 'high_school_world_history', 'human_aging', 'human_sexuality', 'international_law', 'jurisprudence', 'logical_fallacies', 'machine_learning', 'management', 'marketing', 'medical_genetics', 'miscellaneous', 'moral_disputes', 'moral_scenarios', 'nutrition', 'philosophy', 'prehistory', 'professional_accounting', 'professional_law', 'professional_medicine', 'professional_psychology', 'public_relations', 'security_studies', 'sociology', 'us_foreign_policy', 'virology', 'world_religions']
 
@@ -243,8 +249,8 @@ def download_mmlu():
             )
     
     conversations_to_return = []
-    for category in categories:
-        dset = load_dataset("tasksource/mmlu", category, token=True)
+    for category in tqdm(categories, desc="Processing MMLU Categories"):
+        dset = load_dataset("tasksource/mmlu", category, token=True)["test"]
         for datum in dset:
             conversations_to_return.append(process_data(datum))
     
@@ -286,6 +292,7 @@ def main(dataset_id:str, sample: int, dataset_folder:str, save_path_overwrite: s
         dset_df.to_csv(save_path, index=False)
     else:
         raise ValueError(f"Don't recognize this save path extension for the constructed save_path: {save_path}")
+    print(f"Dataset Saved to {save_path}")
 
 
 if __name__ == "__main__":
@@ -304,8 +311,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--dataset_folder",
-        required=True,
-        default="../../datasets",
+        required=False,
+        default="dataset_downloads",
         help="General 'datasets' folder where you plan to store datasets in. Datasets are saved in {dataset_folder}/{dataset_name}/<actual data files> for consistency."
     )
     parser.add_argument(
