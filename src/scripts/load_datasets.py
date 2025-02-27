@@ -209,7 +209,8 @@ def load_datasets(by: Literal["id", "category", "size"], ids=[], categories=[], 
     # Load the dataset objects and return 
     datasets = []
     for dataset_id in matching_dataset_ids: 
-        dataset=dataset = read_data_from_files(dataset_id=dataset_id, path_to_dataset_downloads = path_to_dataset_downloads)
+        data = read_data_from_files(dataset_id=dataset_id, path_to_dataset_downloads = path_to_dataset_downloads)
+        dataset = Dataset(dataset_id=dataset_id, data = data)
         datasets.append(dataset)
     
     return datasets
