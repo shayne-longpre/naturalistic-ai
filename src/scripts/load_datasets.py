@@ -56,9 +56,9 @@ class Conversation(object):
     
 
 
-def download_lmsys_1m():
+def download_lmsys_1m(sample=None):
     # https://huggingface.co/datasets/lmsys/lmsys-chat-1m
-    dset = io.huggingface_download('lmsys/lmsys-chat-1m', split='train')
+    dset = io.huggingface_download('lmsys/lmsys-chat-1m', split='train', sample=sample)
 
     def process_data(datum):
         conversation = [
@@ -84,8 +84,8 @@ def download_lmsys_1m():
     return [process_data(datum) for datum in dset]
 
 # Download WildChat
-def download_wildchat_v1():
-    dset = io.huggingface_download("allenai/WildChat-1M", split="train")
+def download_wildchat_v1(sample=None):
+    dset = io.huggingface_download("allenai/WildChat-1M", split="train", sample=sample)
 
     def process_data(datum):
         state = datum.get('state')
@@ -115,7 +115,7 @@ def download_wildchat_v1():
     return [process_data(datum) for datum in dset]
 
 # Download ShareGPT
-def download_sharegpt_v1():
+def download_sharegpt_v1(sample=None):
     # unfiltered: https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered
     sharegpt_dir = "anon8231489123/ShareGPT_Vicuna_unfiltered"
     sv_dset_p1 = hf_hub_download(
@@ -157,6 +157,8 @@ def download_sharegpt_v1():
             languages=None,
         )
 
+    if sample is not None:
+        full_dset = random.sample(full_dset, sample)
     return [process_data(datum) for datum in full_dset] 
 
 
