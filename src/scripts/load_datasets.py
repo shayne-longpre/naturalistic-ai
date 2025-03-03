@@ -10,116 +10,6 @@ sys.path.append("./")
 sys.path.append("src/")
 from src.scripts.dataset_utils import Dataset, Conversation
 
-def process_csv_into_conversations(path):
-    conversations = []
-    data = pd.read_csv(path)
-    for _, row in data.iterrows():
-        conv_unpacked = [
-            {"text": row[f"Turn {i}"]} for i in range(6) if pd.notna(row[f"Turn {i}"])
-        ]
-        conv_obj = Conversation(
-            ex_id=row["ex_id"],
-            dataset_id=row["dataset_id"],
-            user_id=row["user_id"],
-            time=row["time"],
-            model=row["model"],
-            conversation=conv_unpacked,
-            geography=row["geography"],
-            languages=row["languages"]
-        )
-        conversations.append(conv_obj)
-        
-    return conversations
-
-def process_jsonl_into_conversations(path):
-    conversations = []
-  
-    with jsonlines.open(path) as reader:
-        for item in reader:
-            conversation = [
-                {"text": turn["text"]} for turn in item["conversation"]
-            ]
-            
-            conv_obj = Conversation(
-                ex_id=item["ex_id"],
-                dataset_id=item["dataset_id"],
-                user_id=item["user_id"],
-                time=item["time"],
-                model=item["model"],
-                conversation=conversation,
-                geography=item["geography"],
-                languages=item["languages"]
-            )
-
-            conversations.append(conv_obj)
-    
-    return conversations
-
-def process_json_into_conversations(path):
-    conversations = []
-    with open(path, 'r') as file:
-        data = json.load(file)
-        for item in data:
-            conversation = [
-                {"text": turn["text"]} for turn in item["conversation"]
-            ]
-            
-            conv_obj = Conversation(
-                ex_id=item["ex_id"],
-                dataset_id=item["dataset_id"],
-                user_id=item["user_id"],
-                time=item["time"],
-                model=item["model"],
-                conversation=conversation,
-                geography=item["geography"],
-                languages=item["languages"]
-            )
-
-            conversations.append(conv_obj)
-    return conversations
-
-def read_data_from_files(dataset_id, path_to_dataset_downloads=""):
-    """
-    Read data from downloaded file. This is used by the Dataset object to get the data for a specific dataset (specified by the dataset_id). 
-    If no path_to_dataset_downloads is provided, the function will look for a valid file at '../../dataset_downloads/{dataset_id}/dataset.{json,csv,jsonl}.
-
-    Args:
-        dataset_id (str): The id of the dataset to load.
-        path_to_dataset_downloads (str, optional): The local path to the dataset. Defaults to None. If not provided, the dataset is loaded via HF API. 
-
-    Returns:
-        List[Conversation]: The loaded dataset as a list of Conversation objects.
-    """
-    conversations = []
-  
-    # Check all extensions at the provided folder, as well as the default download location.
-    paths_to_check = [
-        f"{path_to_dataset_downloads}/{dataset_id}/dataset.json",
-        f"{path_to_dataset_downloads}/{dataset_id}/dataset.jsonl",
-        f"{path_to_dataset_downloads}/{dataset_id}/dataset.csv",
-        f"dataset_downloads/{dataset_id}/dataset.json",
-        f"dataset_downloads/{dataset_id}/dataset.jsonl",
-        f"dataset_downloads/{dataset_id}/dataset.csv"
-    ]
-
-    path_to_use = next((path for path in paths_to_check if os.path.exists(path)), None)
-
-    if not path_to_use:
-        raise ValueError(f"No valid file found for {dataset_id} in provided directory {path_to_dataset_downloads}/{dataset_id}, and no valid file found at the default download location of dataset_downloads/{dataset_id}.csv / .jsonl / .json")
-    
-     # If a valid path exists, load it as a list of conversation objects and return. 
-    print(f"Reading File {path_to_use}", flush=True)
-    if path_to_use.endswith('.json'):
-        conversations = process_json_into_conversations(path_to_use)
-    elif path_to_use.endswith('.jsonl'):
-        conversations = process_jsonl_into_conversations(path_to_use)
-    elif path_to_use.endswith('.csv'):
-        conversations = process_csv_into_conversations(path_to_use)
-    else:
-        raise ValueError("Unsupported file format. Only .json, .jsonl, and .csv are supported.")
-  
-    return conversations
-
 
 DATASET_LOCATIONS = {
     ### User Datasets ###
@@ -183,7 +73,20 @@ def filter_by_size(size_range:list[int]):
     
     return []
 
-def load_datasets(by: Literal["id", "category", "size"], ids=[], categories=[], size_range =[], path_to_dataset_downloads =""):
+def load_datasets(by: Literal["id", "category", "size"], ids:list[str]=[], categories:list[str]=[], size_range:list[int] =[], path_to_dataset_downloads:str =""):
+    """
+    This function is used to get any dataset.
+    At the moment, selection can only be made by 1 feature at a time. For more specific selection, provide a list of the dataset_ids. 
+    Args: 
+        -by: how to select the datasets to return. Options are "id", "category", or "size". 
+        -ids: if selecting by dataset_ids, the dataset_ids to search for. 
+        -categories: if selecting by categories, the categories to search for. 
+        -size_range: if selecting by dataset size, the range of sample sizes to filter datasets by. 
+        -path_to_dataset_downloads: not required, use to set the alternative path to the general datasets folder. Expected format is <path_to_dataset_downloads>/<dataset_id>/{file.ext}.
+
+    Return: 
+        - datasets: list[Dataset]. list of dataset objects. 
+    """
     # Find the dataset ids that match the specifications
     if by == "id": 
         if len(ids) == 0: 
@@ -209,8 +112,8 @@ def load_datasets(by: Literal["id", "category", "size"], ids=[], categories=[], 
     # Load the dataset objects and return 
     datasets = []
     for dataset_id in matching_dataset_ids: 
-        data = read_data_from_files(dataset_id=dataset_id, path_to_dataset_downloads = path_to_dataset_downloads)
-        dataset = Dataset(dataset_id=dataset_id, data = data)
+        dataset = Dataset(dataset_id=dataset_id)
+        dataset.load_data_from_file(path_to_dataset_downloads = path_to_dataset_downloads)
         datasets.append(dataset)
     
     return datasets
