@@ -11,9 +11,8 @@ from datasets import load_dataset
 
 sys.path.append("./")
 sys.path.append("src/")
-from dataset_utils import Conversation
+from dataset_utils import Conversation, Dataset
 
-from helpers import constants
 from helpers import io
 import uuid
 
@@ -267,32 +266,20 @@ DOWNLOAD_FUNCTIONS = {
 
 
 def main(dataset_id:str, sample: int, dataset_folder:str, save_path_overwrite: str, dataset_file_type:str = "jsonl"):
+    # Check args 
     assert dataset_id in DOWNLOAD_FUNCTIONS, f"{dataset_id} not in {DOWNLOAD_FUNCTIONS.keys()}"
     assert dataset_file_type in ["json", "jsonl", "csv"], f"{dataset_file_type} is not one of [json, jsonl, csv]."
 
-    dset_loader = DOWNLOAD_FUNCTIONS[dataset_id]
-    dset = dset_loader()
-
+    # Download data and optionally sample
+    data_download_fn = DOWNLOAD_FUNCTIONS[dataset_id]
+    data = data_download_fn()
     if sample:
-        dset = random.sample(dset, int(sample))
+        data = random.sample(data, int(sample))
 
-    if save_path_overwrite: 
-        save_path = save_path_overwrite
-    else: 
-        os.makedirs(f"{dataset_folder}", exist_ok=True)
-        os.makedirs(f"{dataset_folder}/{dataset_id}", exist_ok=True)
-        save_path = f"{dataset_folder}/{dataset_id}/dataset.{dataset_file_type}"
+    # Write to file 
+    dset = Dataset(dataset_id=dataset_id, data = data)
+    dset.write_to_file(data = data, dataset_folder=dataset_folder, save_path_overwrite = save_path_overwrite, dataset_file_type = dataset_file_type)
     
-    if save_path.endswith(".jsonl"):
-        dset = [x.to_dict() for x in dset]
-        io.write_jsonl(dset, save_path)
-    elif save_path.endswith(".csv"):
-        dset_df = pd.DataFrame([x.to_dict(unpack_conversation=True) for x in dset])
-        dset_df.to_csv(save_path, index=False)
-    else:
-        raise ValueError(f"Don't recognize this save path extension for the constructed save_path: {save_path}")
-    print(f"Dataset Saved to {save_path}")
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
