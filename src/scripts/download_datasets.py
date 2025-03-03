@@ -32,7 +32,7 @@ def download_lmsys_1m():
         conversation = [
             {
                 "role": msg.get("role"),
-                "turn": idx,
+                "turn": idx +1, # start at 1 for consistency
                 "text": msg.get("content", "")
             }
             for idx, msg in enumerate(datum.get("conversation", []))
@@ -65,7 +65,7 @@ def download_wildchat_v1():
         conversation = [
             {
                 "role": msg.get("role"),
-                "turn": idx,
+                "turn": idx +1, # start turn count at 1
                 "text": msg.get("content", "")
             }
             for idx, msg in enumerate(datum.get("conversation", []))
@@ -113,7 +113,7 @@ def download_sharegpt_v1():
             assert msg.get("from", "") in sharegpt_systems, "Error: " + msg["from"]
             conversation.append({
                 "role": msg.get("from"),
-                "turn": idx,
+                "turn": idx + 1, # start turn count at 1
                 "text": msg.get("value", "")
             })
 
@@ -136,7 +136,7 @@ def download_chatbot_arena():
     dset = io.huggingface_download("lmsys/chatbot_arena_conversations", split="train")
 
     def add_turn_and_rename_keys(conv:list[object]):
-        turn_count = 0
+        turn_count = 1
         conv_with_turn = []
         for statement in conv:
             statement["turn"] = turn_count
@@ -199,11 +199,11 @@ def download_alpaca_eval():
     def process_data(datum):
         conv = [{
                 "role": "user",
-                "turn": 0, 
+                "turn": 1, 
                 "text": datum.get("instruction")
                 }, {
                 "role": "assistant",
-                "turn": 0, 
+                "turn": 1, 
                 "text": datum.get("output")
                 }]
 
@@ -232,7 +232,7 @@ def download_mmlu():
     def process_data(datum):
             conv = [{
                     "role": "user",
-                    "turn": 0, 
+                    "turn": 1, 
                     "text": datum.get("question")
                     }
                     ]
