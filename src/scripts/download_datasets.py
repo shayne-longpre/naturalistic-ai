@@ -141,8 +141,7 @@ def download_chatbot_arena():
         for statement in conv:
             statement["turn"] = turn_count
             statement["text"] = statement.pop("content")
-            if statement["role"] == "assistant":
-                turn_count = turn_count+1
+            turn_count = turn_count+1
             conv_with_turn.append(statement)
         return conv_with_turn
 
