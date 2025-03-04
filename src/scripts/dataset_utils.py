@@ -183,6 +183,11 @@ class Dataset():
         return df
     
     ### Getters ###
+    # TODO include a 'level' flag. 
+    # If level = "message", return a dataframe where each row has a message id / conversation id and the requested feature of that message.
+    #   Example: get_feature(level` = "message") => Dataframe(conv_id = [3,3,3], message_id=[4,5,6], feature=[B,C,A])  
+    # If level = "conversation", return a dataframe where each row has the conversation ID, and a *list* of features in that conversation. 
+    #   Example: get_feature(level` = "conversation") => Dataframe(conv_id = [3], feature=[B,C,A]) 
     def get_feature(self, feature, as_pandas = False):
         """
         This function by default returns the data as 2 lists, one of the example ids and one of the requested feature. 
