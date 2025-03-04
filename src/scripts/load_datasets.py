@@ -1,208 +1,120 @@
-import sys
-import os
+import pandas as pd 
+import jsonlines 
+import json
 import argparse
+import os
+from typing import Literal
 import numpy as np
-import pandas as pd
-import random
-from datetime import datetime
-from huggingface_hub import hf_hub_download
-
+import sys
 sys.path.append("./")
 sys.path.append("src/")
-
-from helpers import constants
-from helpers import io
+from src.scripts.dataset_utils import Dataset, Conversation
 
 
-class Conversation(object):
-    """A conversation object, with all metadata."""
+DATASET_LOCATIONS = {
+    ### User Datasets ###
+    "wildchat_v1": "dataset_downloads/wildchat_v1",
+    "lmsys_1m": "dataset_downloads/lmsys_1m",
+    "sharegpt_v1": "dataset_downloads/sharegpt_v1",
 
-    def __init__(
-        self,
-        ex_id,
-        dataset_id,
-        user_id,
-        time,
-        model,
-        conversation,
-        geography=None,
-        languages=None,
-    ):
-        self.ex_id = ex_id
-        self.dataset_id = dataset_id
-        self.user_id = user_id
-        self.time = time
-        self.model = model
-        self.conversation = conversation
-        self.geography = geography
-        self.languages = languages
-
-    def to_dict(self, unpack_conversation=False):
-        obj = {
-            "ex_id": self.ex_id,
-            "dataset_id": self.dataset_id,
-            "user_id": self.user_id,
-            "time": self.time,
-            "model": self.model,
-            "geography": self.geography,
-            "languages": self.languages,
-        }
-        if unpack_conversation:
-            for i in range(6):
-                obj[f"Turn {i}"] = self.conversation[i]["text"] if i < len(self.conversation) else ""
-        else:
-            obj["conversation"] = self.conversation
-        return obj
+    ### Benchmarks ###
+    "chatbot_arena": "dataset_downloads/chatbot_arena",
+    "alpaca_eval": "dataset_downloads/alpaca_eval",
+    "mmlu": "dataset_downloads/mmlu"
+}
+DATASET_CATEGORIES = {
+    ### User Datasets ###
+    "wildchat_v1": "conversation",
+    "lmsys_1m": "conversation",
+    "sharegpt_v1": "conversation",
     
-
-
-def download_lmsys_1m():
-    # https://huggingface.co/datasets/lmsys/lmsys-chat-1m
-    dset = io.huggingface_download('lmsys/lmsys-chat-1m', split='train')
-
-    def process_data(datum):
-        conversation = [
-            {
-                "role": msg.get("role"),
-                "turn": idx,
-                "text": msg.get("content", "")
-            }
-            for idx, msg in enumerate(datum.get("conversation", []))
-        ]
-
-        return Conversation(
-            ex_id="lmsys1m_" + datum.get('conversation_id'),
-            dataset_id="lmsys1m_",
-            user_id=None,
-            time=None,
-            model=datum.get('model'),
-            conversation=conversation,
-            geography=None,
-            languages=datum.get('language', None),
-        )
-
-    return [process_data(datum) for datum in dset]
-
-# Download WildChat
-def download_wildchat_v1():
-    dset = io.huggingface_download("allenai/WildChat-1M", split="train")
-
-    def process_data(datum):
-        state = datum.get('state')
-        country = f"{datum.get('country', 'Unknown')}"
-        timestamp = datum.get('timestamp')
-        
-        conversation = [
-            {
-                "role": msg.get("role"),
-                "turn": idx,
-                "text": msg.get("content", "")
-            }
-            for idx, msg in enumerate(datum.get("conversation", []))
-        ]
-
-        return Conversation(
-            ex_id="wildchat_" + datum.get('conversation_hash'),
-            dataset_id="wildchat_1m",
-            user_id=datum.get('hashed_ip'),
-            time=timestamp.isoformat() if isinstance(timestamp, datetime) else None,
-            model=datum.get('model'),
-            conversation=conversation,
-            geography=country if state is None else f"{country}; {state}",
-            languages=None,
-        )
+    ### Benchmarks ###
+    "chatbot_arena": "benchmark",
+    "alpaca_eval": "benchmark",
+    "mmlu": "benchmark"
+}
+DATASET_SIZES = {
+    ### User Datasets ###
+    "wildchat_v1": 1000000,
+    "lmsys_1m": 1000000,
+    "sharegpt_v1": 90665,
     
-    return [process_data(datum) for datum in dset]
-
-# Download ShareGPT
-def download_sharegpt_v1():
-    # unfiltered: https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered
-    sharegpt_dir = "anon8231489123/ShareGPT_Vicuna_unfiltered"
-    sv_dset_p1 = hf_hub_download(
-        repo_id=sharegpt_dir,
-        filename="sg_90k_part1.json",
-        subfolder="HTML_cleaned_raw_dataset",
-        repo_type="dataset",
-    )
-    sv_dset_p2 = hf_hub_download(
-        repo_id=sharegpt_dir,
-        filename="sg_90k_part2.json",
-        subfolder="HTML_cleaned_raw_dataset",
-        repo_type="dataset",
-    )
-    full_dset = pd.concat([pd.read_json(sv_dset_p1), pd.read_json(sv_dset_p2)]).to_dict(
-        "records"
-    )
-
-    sharegpt_systems = ["system", "human", "user", "gpt", "chatgpt", "bing", "bard", "assistant"]
-    def process_data(datum):
-        conversation = []
-        
-        for idx, msg in enumerate(datum.get("conversations", [])):
-            assert msg.get("from", "") in sharegpt_systems, "Error: " + msg["from"]
-            conversation.append({
-                "role": msg.get("from"),
-                "turn": idx,
-                "text": msg.get("value", "")
-            })
-
-        return Conversation(
-            ex_id="sharegpt_" + datum.get('id'),
-            dataset_id="sharegpt",
-            user_id=None,
-            time=None,  # TODO: fill in rough period
-            model=None,  # TODO: fill in OpenAI models at that time
-            conversation=conversation,
-            geography=None,
-            languages=None,
-        )
-
-    return [process_data(datum) for datum in full_dset] 
-
-
-DATASETS = {
-    "wildchat_v1": download_wildchat_v1,
-    "lmsys_1m": download_lmsys_1m,
-    "sharegpt_v1": download_sharegpt_v1,
+    ### Benchmarks ###
+    "chatbot_arena": 66000,
+    "alpaca_eval":  805,
+    "mmlu": 14042
 }
 
-def main(dataset_id, sample, save_fpath):
-    assert dataset_id in DATASETS, f"{dataset_id} not in {DATASETS.keys()}"
-    dset_loader = DATASETS[dataset_id]
-    dset = dset_loader()
-    if sample:
-        dset = random.sample(dset, int(sample))
+def filter_by_id(ids: list[str]):
+    valid_ids = []
+    for id in ids: 
+        if id in DATASET_LOCATIONS.keys():
+            valid_ids.append(id)
+        else: 
+            print(f"\n\n**** WARNING: {id} was not found as a valid dataset id. Available datasets include: {DATASET_LOCATIONS.keys()}")
+    return valid_ids
 
-    if save_fpath.endswith(".jsonl"):
-        dset = [x.to_dict() for x in dset]
-        io.write_jsonl(dset, save_fpath)
-    elif save_fpath.endswith(".csv"):
-        dset_df = pd.DataFrame([x.to_dict(unpack_conversation=True) for x in dset])
-        dset_df.to_csv(save_fpath, index=False)
-    else:
-        raise ValueError("Don't recognize this save path extension.")
+def filter_by_categories(categories: list[str]):
+    valid_ids = []
+    for id, category in DATASET_CATEGORIES.items():
+        if category in categories:
+            valid_ids.append(id)
+    if len(valid_ids) == 0: 
+        print(f"\n\n**** WARNING: no datasets were found with the provided categories. Available categories include: {list(set(DATASET_LOCATIONS.values()))}")
+    return valid_ids
 
+def filter_by_size(size_range:list[int]):
+    valid_ids = []
+    for id, size in DATASET_SIZES.items(): 
+        if size >= size_range[1] and size <= size_range[0]: 
+            valid_ids.append(id)
+    if len(valid_ids) == 0: 
+        print(f"\n\n**** WARNING: no datasets were found within the provided size range of {size_range}. The sizes of available datasets are: {', '.join([f'\n{key}: {value}' for key, value in DATASET_SIZES.items()])}")
+    
+    return []
 
+def load_datasets(by: Literal["id", "category", "size"], ids:list[str]=[], categories:list[str]=[], size_range:list[int] =[], path_to_dataset_downloads:str =""):
+    """
+    This function is used to get any dataset.
+    At the moment, selection can only be made by 1 feature at a time. For more specific selection, provide a list of the dataset_ids. 
+    Args: 
+        -by: how to select the datasets to return. Options are "id", "category", or "size". 
+        -ids: if selecting by dataset_ids, the dataset_ids to search for. 
+        -categories: if selecting by categories, the categories to search for. 
+        -size_range: if selecting by dataset size, the range of sample sizes to filter datasets by. 
+        -path_to_dataset_downloads: not required, use to set the alternative path to the general datasets folder. Expected format is <path_to_dataset_downloads>/<dataset_id>/{file.ext}.
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--dataset",
-        required=True,
-        default=None,
-        help=f"Dataset ID from {DATASETS.keys()}"
-    )
-    parser.add_argument(
-        "--sample",
-        required=False,
-        default=False,
-        help=f"An integer for how many to sample from the dataset."
-    )
-    parser.add_argument(
-        "--save",
-        required=True,
-        default=None,
-        help="Save filepath for dataset."
-    )
-    args = parser.parse_args()
-    main(args.dataset, args.sample, args.save)
+    Return: 
+        - datasets: list[Dataset]. list of dataset objects. 
+    """
+    # Find the dataset ids that match the specifications
+    if by == "id": 
+        if len(ids) == 0: 
+            raise ValueError(f"You've specified loading datasets by ID, but have not provided any dataset ids. Try something like: load_datasets(by='id', ids=['mmlu'])")
+        matching_dataset_ids = filter_by_id(ids)
+
+    elif by == "category": 
+        if len(categories) == 0: 
+            raise ValueError(f"You've specified loading datasets by categories, but have not provided any categories. Try something like: load_datasets(by='category', categories=['benchmark'])")
+        matching_dataset_ids = filter_by_categories(categories)
+
+    elif by == "size":
+        if len(size_range) < 2: 
+            raise ValueError(f"You've specified loading datasets by size, but have not provided a valid size_range. Try something like: load_datasets(by='size', size_range=[0,10000])")
+        matching_dataset_ids = filter_by_size(size_range)
+
+    # Confirm at least one match is found
+    if len(matching_dataset_ids) == 0: 
+        raise ValueError(f"No datasets meet the specifications given. The available datasets include {DATASET_LOCATIONS.keys()}")
+   
+    print(f"Found {len(matching_dataset_ids)} datasets that meet the desired specifications: {matching_dataset_ids}. Loading them from data files...")
+   
+    # Load the dataset objects and return 
+    datasets = []
+    for dataset_id in matching_dataset_ids: 
+        dataset = Dataset(dataset_id=dataset_id)
+        dataset.load_data_from_file(path_to_dataset_downloads = path_to_dataset_downloads)
+        datasets.append(dataset)
+    
+    return datasets
+
