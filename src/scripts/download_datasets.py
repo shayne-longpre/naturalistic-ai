@@ -10,8 +10,9 @@ from huggingface_hub import hf_hub_download
 from datasets import load_dataset
 
 sys.path.append("./")
-sys.path.append("src/")
-from dataset_utils import Conversation, Dataset
+# from src.classes.message import Message
+from src.classes.conversation import Conversation
+from src.classes.dataset import Dataset
 
 from helpers import io
 import uuid
@@ -31,14 +32,14 @@ def download_lmsys_1m():
         conversation = [
             {
                 "role": msg.get("role"),
-                "turn": idx +1, # start at 1 for consistency
-                "text": msg.get("content", "")
+                "turn": idx,
+                "content": msg.get("content", "")
             }
             for idx, msg in enumerate(datum.get("conversation", []))
         ]
 
         return Conversation(
-            ex_id="lmsys1m_" + datum.get('conversation_id'),
+            conversation_id="lmsys1m_" + datum.get('conversation_id'),
             dataset_id="lmsys1m_",
             user_id=None,
             time=None,
@@ -64,14 +65,14 @@ def download_wildchat_v1():
         conversation = [
             {
                 "role": msg.get("role"),
-                "turn": idx +1, # start turn count at 1
-                "text": msg.get("content", "")
+                "turn": idx,
+                "content": msg.get("content", "")
             }
             for idx, msg in enumerate(datum.get("conversation", []))
         ]
 
         return Conversation(
-            ex_id="wildchat_" + datum.get('conversation_hash'),
+            conversation_id="wildchat_" + datum.get('conversation_hash'),
             dataset_id="wildchat_1m",
             user_id=datum.get('hashed_ip'),
             time=timestamp.isoformat() if isinstance(timestamp, datetime) else None,
@@ -112,12 +113,12 @@ def download_sharegpt_v1():
             assert msg.get("from", "") in sharegpt_systems, "Error: " + msg["from"]
             conversation.append({
                 "role": msg.get("from"),
-                "turn": idx + 1, # start turn count at 1
-                "text": msg.get("value", "")
+                "turn": idx,
+                "content": msg.get("value", "")
             })
 
         return Conversation(
-            ex_id="sharegpt_" + datum.get('id'),
+            conversation_id="sharegpt_" + datum.get('id'),
             dataset_id="sharegpt",
             user_id=None,
             time=None,  # TODO: fill in rough period
@@ -139,7 +140,7 @@ def download_chatbot_arena():
         conv_with_turn = []
         for statement in conv:
             statement["turn"] = turn_count
-            statement["text"] = statement.pop("content")
+            statement["content"] = statement.pop("content")
             turn_count = turn_count+1
             conv_with_turn.append(statement)
         return conv_with_turn
@@ -157,7 +158,7 @@ def download_chatbot_arena():
         conv_b_reformatted = add_turn_and_rename_keys(conv_b)
         
         conversation_a = Conversation(
-            ex_id="chatbot_arena_" + datum.get('question_id') + "_a",
+            conversation_id="chatbot_arena_" + datum.get('question_id') + "_a",
             dataset_id="chatbot_arena",
             user_id=datum.get('judge'),
             time=timestamp.isoformat() if isinstance(timestamp, datetime) else None,
@@ -168,7 +169,7 @@ def download_chatbot_arena():
         )
         
         conversation_b = Conversation(
-            ex_id="chatbot_arena_" + datum.get('question_id') + "_b",
+            conversation_id="chatbot_arena_" + datum.get('question_id') + "_b",
             dataset_id="chatbot_arena",
             user_id=datum.get('judge'),
             time=timestamp.isoformat() if isinstance(timestamp, datetime) else None,
@@ -198,16 +199,16 @@ def download_alpaca_eval():
         conv = [{
                 "role": "user",
                 "turn": 1, 
-                "text": datum.get("instruction")
+                "content": datum.get("instruction")
                 }, {
                 "role": "assistant",
                 "turn": 1, 
-                "text": datum.get("output")
+                "content": datum.get("output")
                 }]
 
         
         return Conversation(
-            ex_id="alpaca_eval_" + str(uuid.uuid4()),
+            conversation_id="alpaca_eval_" + str(uuid.uuid4()),
             dataset_id="alpaca_eval",
             user_id=str(uuid.uuid4()),
             time=None,
@@ -232,13 +233,13 @@ def download_mmlu():
             conv = [{
                     "role": "user",
                     "turn": 1, 
-                    "text": datum.get("question") + " " + " ".join(f"{choice_indiciators[i]} {datum.get("choices")[i]}" for i in range(len(datum.get("choices"))))
+                    "content": datum.get("question") + " " + " ".join(f"{choice_indiciators[i]} {datum.get("choices")[i]}" for i in range(len(datum.get("choices"))))
                     }
                     ]
-            print(conv)
+            # print(conv)
 
             return Conversation(
-                ex_id="mmlu_" + str(uuid.uuid4()),
+                conversation_id="mmlu_" + str(uuid.uuid4()),
                 dataset_id="mmlu",
                 user_id=str(uuid.uuid4()),
                 time=None,
@@ -267,10 +268,13 @@ DOWNLOAD_FUNCTIONS = {
 }
 
 
-def main(dataset_id:str, sample: int, dataset_folder:str, save_path_overwrite: str, dataset_file_type:str = "jsonl"):
+def main(
+    dataset_id:str, 
+    sample: int,
+    save_path_overwrite: str, 
+):
     # Check args 
     assert dataset_id in DOWNLOAD_FUNCTIONS, f"{dataset_id} not in {DOWNLOAD_FUNCTIONS.keys()}"
-    assert dataset_file_type in ["json", "jsonl", "csv"], f"{dataset_file_type} is not one of [json, jsonl, csv]."
 
     # Download data and optionally sample
     data_download_fn = DOWNLOAD_FUNCTIONS[dataset_id]
@@ -279,8 +283,9 @@ def main(dataset_id:str, sample: int, dataset_folder:str, save_path_overwrite: s
         data = random.sample(data, int(sample))
 
     # Write to file 
-    dset = Dataset(dataset_id=dataset_id, data = data)
-    dset.write_to_file(data = data, dataset_folder=dataset_folder, save_path_overwrite = save_path_overwrite, dataset_file_type = dataset_file_type)
+    save_path = save_path_overwrite if save_path_overwrite else f"data/dataset_downloads/{dataset_id}_{len(data)}.json"
+    dset = Dataset(dataset_id=dataset_id, data=data)
+    dset.save_to_json(save_path)
     
 
 if __name__ == "__main__":
@@ -298,16 +303,10 @@ if __name__ == "__main__":
         help=f"An integer for how many to sample from the dataset."
     )
     parser.add_argument(
-        "--dataset_folder",
-        required=False,
-        default="dataset_downloads",
-        help="General 'datasets' folder where you plan to store datasets in. Datasets are saved in {dataset_folder}/{dataset_name}/<actual data files> for consistency."
-    )
-    parser.add_argument(
         "--save_path_overwrite",
         required=False,
         default="",
-        help="By default, Datasets are saved in {dataset_folder}/{dataset_name}/<actual data files> for consistency. To define a specific save path instead, provide the full path here."
+        help="By default, Datasets are saved in data/dataset_downloads/<dataset_id>_<sample>.json for consistency. To define a specific save path instead, provide the full path here."
     )
     args = parser.parse_args()
     main(args.dataset_id, args.sample, args.dataset_folder, args.save_path_overwrite)

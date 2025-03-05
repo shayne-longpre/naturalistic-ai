@@ -4,3 +4,7 @@ tiktoken
 numpy
 pandas
 datasets
+matplotlib
+seaborn
+scikit-learn
+torch

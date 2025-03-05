@@ -6,9 +6,9 @@ import argparse
 from tqdm import tqdm
 
 sys.path.append("./")
-sys.path.append("src/")
 
-from helpers import constants, io, gpt
+from src.helpers import constants, io, gpt
+
 
 def batch_generator(data_list, batch_size):
     for i in range(0, len(data_list), batch_size):

@@ -7,6 +7,7 @@ import yaml
 import json
 import jsonlines
 import multiprocessing
+import random
 from ast import literal_eval
 import pandas as pd
 import typing
@@ -106,7 +107,7 @@ def read_yaml(inpath: str):
 
 
 def huggingface_download(
-    data_address, name=None, data_dir=None, data_files=None, split=None
+    data_address, name=None, data_dir=None, data_files=None, split=None, sample=None,
 ):
     """Download a dataset from the Hugging Face Hub.
 
@@ -119,6 +120,7 @@ def huggingface_download(
         data_dir (str, optional): Path to the directory containing the dataset files. Defaults to None.
         data_files (str or list, optional): Path(s) to specific dataset files. Defaults to None.
         split (str, optional): Name of the split to take (usually "train"). Defaults to None.
+        sample (None or int): How many rows to sample. Defaults to None, to take all data.
 
     Returns:
         list or Dataset: The downloaded dataset as a list of items,
@@ -144,4 +146,7 @@ def huggingface_download(
     except:
         print("Trouble converting Hugging Face dataset to list...")
         pass
+
+    if sample is not None:
+        dset = random.sample(dset, sample)
     return dset
