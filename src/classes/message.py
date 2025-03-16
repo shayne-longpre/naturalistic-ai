@@ -25,7 +25,7 @@ class Message(object):
             "role": self.role,
             "content": self.content,
             "timestamp": self.timestamp,
-            "metadata": self.metadata
+            "metadata": {k: v.to_dict() for k, v in self.metadata.items()}
         }
 
 

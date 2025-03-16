@@ -1,32 +1,183 @@
+import os 
 import sys
 import pandas as pd 
 import json
+from typing import List, Dict, Any, Set
 
 sys.path.append("./")
 
 from src.helpers.io import read_jsonl, write_json
 from src.classes.dataset import Dataset
-from src.classes.annotation_set import AnnotationSet
+from src.classes.label_studio import load_labelstudio, split_labelstudio_files_by_conversation_id
+from src.classes.annotation_set import AnnotationSet, parse_labelstudio_files, process_annotations_to_annotation_sets
 from src.helpers.visualisation import tabulate_interrater_metrics, barplot_distribution, plot_confusion_matrix
 
 
-def run_test_cedric_zoey():
+
+
+def add_conversation_ids_to_label_studio_files(
+    label_studio_folder: str, 
+    conversations_file_path: str, 
+    output_folder: str = None
+):
+    """
+    Add conversation_id to Label Studio JSON files by matching text content from a conversations file.
+    
+    Args:
+        label_studio_folder: Path to folder containing Label Studio JSON files
+        conversations_file_path: Path to the file containing conversations with IDs
+        output_folder: Path to save the modified files (if None, will modify in place)
+        
+    Returns:
+        None (files are modified in place or saved to output_folder)
+    """
+    # Create a dictionary for fast text lookup
+    text_to_conversation_id = {}
+    
+    # Load conversations file
+    print(f"Loading conversations from {conversations_file_path}")
+    with open(conversations_file_path, 'r', encoding='utf-8') as f:
+        conversation_data = json.load(f)["data"]
+        for conversation_datum in conversation_data:
+            conversation_id = conversation_datum.get('conversation_id')
+            
+            # Skip if no conversation_id is found
+            if not conversation_id:
+                continue
+            
+            # Add each turn's text to the lookup dictionary
+            conv_text = ""
+            for turn in conversation_datum.get('conversation', []):
+                # In the conversations file, content is under 'content'
+                conv_text += turn.get('content', '')
+
+            if conv_text in text_to_conversation_id:
+                print("Duplicate text in conversation...")
+            if conv_text:
+                # Use the text as key to find the conversation_id later
+                text_to_conversation_id[conv_text] = conversation_id
+    
+    print(f"Loaded {len(text_to_conversation_id)} conversations.")
+    
+    # If output_folder is provided but doesn't exist, create it
+    if output_folder and not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+    
+    # Process each Label Studio file
+    file_count = 0
+    for filename in os.listdir(label_studio_folder):
+        if not filename.endswith('.json'):
+            continue
+            
+        file_path = os.path.join(label_studio_folder, filename)
+        
+        try:
+            # Load JSON file
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            modified = False
+            
+            # Process each annotation task
+            for task in data.get('annotations', []):
+                # Get the conversations in this task
+                conversations = task.get('data', {}).get('conversation', [])
+                
+                # Add conversation_id to each turn based on text matching
+                conv_text = ""
+                for turn in conversations:
+                    conv_text += turn.get('text', '')
+                
+                    
+                # Try to find a matching conversation_id
+                conversation_id = text_to_conversation_id.get(conv_text)
+                
+                if conversation_id:
+                    for turn in conversations:
+                        turn['conversation_id'] = conversation_id
+                    modified = True
+            
+            # Save the modified file
+            if modified:
+                output_path = os.path.join(output_folder, filename) if output_folder else file_path
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                file_count += 1
+                
+        except Exception as e:
+            print(f"Error processing file {filename}: {e}")
+    
+    print(f"Added conversation IDs to {file_count} files")
+
+
+
+def run_test_cedric():
     dataset = Dataset.load('data/sample120.json')
 
-    # TODO: Cedric write this loader function from a folder / file of whatever type.
-    annotations = AnnotationSet.load_labelstudio("data/labelstudio_outputs.json")
-    # TODO: Zoey write this loader function from a folder / file of whatever type.
-    annotations = AnnotationSet.load_automatic("data/gpt_annotation_outputs.json")
+    # TODO: This adds conversation IDs to LabelStudio data and saves it to `data/labelstudio_outputs_wcids/`
+    # Remove this when we have them in the LS outputs by default.
+    add_conversation_ids_to_label_studio_files(
+        "data/labelstudio_outputs/",
+        'data/sample120.json',
+        "data/labelstudio_outputs_wcids/",
+    )
 
-    dataset.add_annotations(annotations)
+    # split annotations into two folders without any duplicate conversation IDs in each file.
+    split_labelstudio_files_by_conversation_id(
+        input_folder="data/labelstudio_outputs_wcids/",
+        output_folder1="data/labelstudio_outputs_split1/",
+        output_folder2="data/labelstudio_outputs_split2/"
+    )
+
+    annotation_sets1 = load_labelstudio(
+        "data/labelstudio_outputs_split1", 
+        source="split1",
+        dataset_id="sample120",
+        level="message",
+    )
+    annotation_sets2 = process_annotations_to_annotation_sets(
+        "data/labelstudio_outputs_split2", 
+        source="split2",
+        dataset_id="sample120",
+        level="message",
+    )
+    
+    # Testing:
+    # for task_key in annotation_sets1:
+    #     num_annotations = len(annotation_sets1[task_key].annotations) + len(annotation_sets2[task_key].annotations)
+    #     print(f"Total annotations for {task_key}: {num_annotations}\n")
+
+    for task, annotation_set in annotation_sets1.items():
+        dataset.add_annotations(annotation_set)
+    for task, annotation_set in annotation_sets2.items():
+        dataset.add_annotations(annotation_set)
+
+    # Testing:
+    # for task_key in annotation_sets1:
+    #     a1_count = sum([1 if f"split1-{task_key}" in m.metadata else 0 for cc in dataset.data for m in cc.conversation])
+    #     a2_count = sum([1 if f"split2-{task_key}" in m.metadata else 0 for cc in dataset.data for m in cc.conversation])
+    #     print(f"Total annotations for {task_key}: {a1_count + a2_count}\n")
+
+    return dataset
+
+    # TODO: group the annotations
+
+    # TODO: Cedric write this loader function from a folder / file of whatever type.
+    # annotations = AnnotationSet.load_labelstudio("data/labelstudio_outputs_split1",)
+    # annotations = AnnotationSet.load_labelstudio("data/labelstudio_outputs_split2",)
+
+    # TODO: Zoey write this loader function from a folder / file of whatever type.
+    # annotations = AnnotationSet.load_automatic("data/gpt_annotation_outputs.json")
+
+    # dataset.add_annotations(annotations)
 
     # Get distribution for single feature
-    print("\nGetting annotation distributions...")
-    info_to_plot1a = dataset.get_annotation_distribution(name='<annotation_name>', level="conversation", annotation_source='<source_name>')
+    # print("\nGetting annotation distributions...")
+    # info_to_plot1a = dataset.get_annotation_distribution(name='<annotation_name>', level="conversation", annotation_source='<source_name>')
     
-    fig = barplot_distribution(
-        info_to_plot1a, normalize=True, xlabel="X", ylabel="Proportion", title="Annotation Feature", 
-        output_path="data/fig1.png")
+    # fig = barplot_distribution(
+    #     info_to_plot1a, normalize=True, xlabel="X", ylabel="Proportion", title="Annotation Feature", 
+    #     output_path="data/fig1.png")
 
 
 def run_test():
@@ -61,7 +212,9 @@ def run_test():
     # Get joint distribution of model and language
     print("\nGetting joint distribution of model and language...")
     info_to_plot2a = dataset.get_joint_distribution(
-        annotations1=('model', None), annotations2=('language', 'model_v1_labels'), level="conversation")
+        annotations1=('model', None), 
+        annotations2=('language', 'model_v1_labels'), 
+        level="conversation")
     
     print("Joint distribution matrix:")
     print(info_to_plot2a)
@@ -111,4 +264,4 @@ def run_test():
     print("\nTest completed successfully!")
 
 if __name__ == "__main__":
-    run_test_cedric_zoey()
+    run_test_cedric()

@@ -4,6 +4,8 @@ import typing
 import json
 from torch.utils.data import DataLoader
 import pandas as pd 
+import itertools
+from collections import defaultdict, Counter
 from sklearn.metrics import cohen_kappa_score, confusion_matrix
 
 sys.path.append("./")
@@ -67,6 +69,12 @@ class Dataset(object):
         """Get a slice of the dataset from start to end."""
         return self.data[start:end]
 
+    def id_lookup(self, ids, level="conversation"):
+        if level == "conversation":
+            return [cc.to_dict() for cc in self.data if cc.conversation_id in ids]
+        else:
+            return [m.to_dict() for cc in self.data for m in cc.conversation if f"{cc.conversation_id}-{m.turn}" in ids]
+
     def add_annotations(
         self,
         annotation_set: AnnotationSet,
@@ -78,24 +86,28 @@ class Dataset(object):
         assert annotation_set.dataset_id == self.dataset_id
         annotation_conv_ids = [x.target_id.split("-")[0] for x in annotation_set.annotations]
         dset_conv_ids = [cc.conversation_id for cc in self.data]
-        # print(dset_conv_ids)
-        # print(annotation_conv_ids)
+        
         assert set(annotation_conv_ids) <= set(dset_conv_ids)
         src, name, lvl = annotation_set.source, annotation_set.name, annotation_set.level
-        print(f"Adding AnnotationSet '{src}' for label=`{name}` ({lvl}-level): {len(annotation_conv_ids)} of {len(dset_conv_ids)} dataset rows")
+        if lvl == "conversation":
+            print(f"Adding AnnotationSet '{src}' for label=`{name}` ({lvl}-level): {len(set(annotation_conv_ids))} of {len(set(dset_conv_ids))} dataset conversations.")
+        else:
+            dset_num_messages = sum([len(cc.conversation) for cc in self.data])
+            annotated_messages = len(annotation_conv_ids)
+            print(f"Adding AnnotationSet '{src}' for label=`{name}` ({lvl}-level): {annotated_messages} of {dset_num_messages} dataset messages, or {len(set(annotation_conv_ids))} of {len(set(dset_conv_ids))} dataset conversations.")
 
         conv_id_to_idx = {x.conversation_id: i for i, x in enumerate(self.data)}
         # add to conversations
         if annotation_set.level == "conversation":
             for annotation in annotation_set.annotations:
                 self.data[conv_id_to_idx[annotation.target_id]].metadata.update({
-                    f"{annotation_set.source}-{annotation_set.name}": annotation.value})
+                    f"{annotation_set.source}-{annotation_set.name}": annotation})
         # or add to messages
         elif annotation_set.level == "message":
             for annotation in annotation_set.annotations:
                 conv_id, turn_id = annotation.target_id.split("-")
-                self.data[conv_id_to_idx[conv_id]].conversation[turn_id].metadata.update({
-                    f"{annotation_set.source}-{annotation_set.name}": annotation.value})
+                self.data[conv_id_to_idx[conv_id]].conversation[int(turn_id)].metadata.update({
+                    f"{annotation_set.source}-{annotation_set.name}": annotation})
         else:
             raise Exception
 
@@ -104,7 +116,8 @@ class Dataset(object):
         self, 
         name: str,
         level: str = "conversation",
-        annotation_source: typing.Optional[str] = None
+        annotation_source: typing.Optional[str] = None,
+        annotation_as_list_type: bool = False,
     ) -> typing.Dict[str, int]:
         """
         Get the distribution of annotation values for a specific feature.
@@ -113,61 +126,78 @@ class Dataset(object):
             name: Name of the annotation feature to analyze
             level: 'conversation' or 'message'.
             annotation_source: Source of the annotation (e.g., 'human_labels', 'model_v1_labels')
-                                If None and name is a built-in attribute, will use that directly
+                If None and name is a built-in attribute, will use that directly
+            annotation_as_list_type: If the annotation type is list, turn this to True to
+                tally the full list as the value, rather than each element (default).
         
         Returns:
             Dictionary mapping each annotation value to its frequency count
         """
         distribution = {}
+
+        def update_value(distribution, value):
+            if isinstance(value, list):
+                if annotation_as_list_type:
+                    list_val = str(sorted(value))
+                    distribution[list_val] = distribution.get(list_val, 0) + 1
+                else:
+                    for val in value:
+                        distribution[val] = distribution.get(val, 0) + 1
+            else:
+                distribution[value] = distribution.get(value, 0) + 1
+            return distribution
+
         
         # Check if we're looking for a built-in attribute (like 'model')
         if level == "conversation" and annotation_source is None:
             assert hasattr(self.data[0], name), f"Every conversation should have {name} attribute."
             for conv in self.data:
                 value = getattr(conv, name)
-                distribution[value] = distribution.get(value, 0) + 1
+                distribution = update_value(distribution, value)
         elif level == "message"  and annotation_source is None:
             assert hasattr(self.data[0].conversation[0], name), f"Every message should have {name} attribute."
             for conv in self.data:
                 for message in conv.conversation:
                     value = getattr(message, name)
-                    distribution[value] = distribution.get(value, 0) + 1
+                    distribution = update_value(distribution, value)
         elif level == "conversation":
             for conv in self.data:
                 if f"{annotation_source}-{name}" in conv.metadata:
-                    value = conv.metadata[f"{annotation_source}-{name}"]
-                    distribution[value] = distribution.get(value, 0) + 1
+                    value = conv.metadata[f"{annotation_source}-{name}"].value
+                    distribution = update_value(distribution, value)
         else:
             for conv in self.data:
                 for msg in conv.conversation:
                     if f"{annotation_source}-{name}" in msg.metadata:
-                        value = msg.metadata[f"{annotation_source}-{name}"]
-                        distribution[value] = distribution.get(value, 0) + 1
+                        value = msg.metadata[f"{annotation_source}-{name}"].value
+                        distribution = update_value(distribution, value)
                     
         return distribution
-    
-    
+
+
     def get_joint_distribution(
         self, 
         annotations1: typing.Tuple[str, typing.Optional[str]], 
         annotations2: typing.Tuple[str, typing.Optional[str]],
         level: str = "conversation",
         compute_disagreement: bool = False,
+        verbose: bool = True,
     ):
         """
-        Get the joint distribution of two annotation features.
+        Get the joint distribution of two annotation features, supporting list-valued features.
         
         Args:
             annotations1: Tuple of (name, source) for the first annotation
             annotations2: Tuple of (name, source) for the second annotation
+            level: The level at which to compute distributions ("conversation" or "message")
             compute_disagreement: Whether to compute disagreement metrics (only for same label sets)
             
         Returns:
             If compute_disagreement is False:
-                DataFrame representing the confusion matrix
+                DataFrame representing the label-level confusion matrix
             If compute_disagreement is True:
                 Tuple of (
-                    DataFrame representing the confusion matrix,
+                    DataFrame representing the label-level confusion matrix,
                     Dictionary of agreement metrics,
                     List of dictionaries containing disagreement details
                 )
@@ -179,88 +209,120 @@ class Dataset(object):
         full_name1 = f"{source1}-{name1}" if source1 else name1
         full_name2 = f"{source2}-{name2}" if source2 else name2
         
-        # Prepare data structures for counting
-        joint_counts = {}
-        paired_values = []
-        disagreement_rows = []
-        total_items = 0
-        value_exists1, value_exists2 = 0, 0
-        
-        # Process based on annotation levels
-        if level == "conversation":
-            for conv in self.data:
-                total_items += 1
+
+        def _create_pairwise_combinations(item_id, val1, val2):
+            """vCreate all pairwise combinations of labels between two potentially list-valued features."""
+            list1 = val1 if isinstance(val1, list) else [val1]
+            list2 = val2 if isinstance(val2, list) else [val2]
+            return [(item_id, label1, label2) for label1, label2 in itertools.product(list1, list2)]
+
+
+        def _create_confusion_matrix(annotation_pairs):
+            """
+            Create a confusion matrix DataFrame from joint counts.
+            """
+            joint_counts = defaultdict(int)
+            for _, label1, label2 in annotation_pairs:
+                joint_counts[(label1, label2)] += 1
+
+            if not joint_counts:
+                return pd.DataFrame()
                 
-                # Handle built-in attributes
-                val1 = getattr(conv, name1) if source1 in [None, "conversation"] else conv.metadata.get(full_name1)
-                val2 = getattr(conv, name2) if source2 in [None, "conversation"] else conv.metadata.get(full_name2)
-                value_exists1 += 1 if val1 is not None else 0
-                value_exists2 += 1 if val2 is not None else 0
+            unique_vals1 = sorted(list(set([k[0] for k in joint_counts.keys()])))
+            unique_vals2 = sorted(list(set([k[1] for k in joint_counts.keys()])))
+            matrix = pd.DataFrame(0, index=unique_vals1, columns=unique_vals2)
+            for (val1, val2), count in joint_counts.items():
+                matrix.loc[val1, val2] = count
                 
-                if val1 is not None and val2 is not None:
-                    joint_counts[(val1, val2)] = joint_counts.get((val1, val2), 0) + 1
-                    paired_values.append((conv.conversation_id, val1, val2))
+            return matrix
+
+        def _compute_annotator_disagreement(annotation_pairs):
+            """
+            Compute agreement metrics for the annotation pairs.
+            """
+            if not annotation_pairs:
+                return {"error": "No paired values found"}
+                
+            metrics = {}
+            _, labels1, labels2 = zip(*annotation_pairs)
+            metrics["label_agreement_rate"] = sum(l1 == l2 for _, l1, l2 in annotation_pairs) / len(annotation_pairs)
+            
+            try:
+                metrics["cohens_kappa"] = cohen_kappa_score([str(x) for x in labels1], [str(x) for x in labels2])
+            except Exception as e:
+                metrics["cohens_kappa_error"] = str(e)
+            return metrics
+
         
-        else: # level == "message"
-            for conv in self.data:
-                for msg in conv.conversation:
+        def _get_annotation_pairs():
+            # Get all annotation pairs
+            combination_pairs, annotation_pairs = [], []
+            total_items, value_exists1, value_exists2 = 0, 0, 0
+
+            if level == "conversation":
+                for conv in self.data:
                     total_items += 1
                     
-                    val1 = msg.metadata.get(full_name1)
-                    val2 = msg.metadata.get(full_name2)
+                    # Handle built-in attributes
+                    if source1 in [None, "conversation"]:
+                        val1 = getattr(conv, name1)
+                    else:
+                        val1 = conv.metadata.get(full_name1).value if full_name1 in conv.metadata else None
+                        
+                    if source2 in [None, "conversation"]:
+                        val2 = getattr(conv, name2)
+                    else:
+                        val2 = conv.metadata.get(full_name2).value if full_name2 in conv.metadata else None
+
                     value_exists1 += 1 if val1 is not None else 0
                     value_exists2 += 1 if val2 is not None else 0
                     
                     if val1 is not None and val2 is not None:
-                        joint_counts[(val1, val2)] = joint_counts.get((val1, val2), 0) + 1
-                        paired_values.append((f"{conv.conversation_id}-{msg.turn}", val1, val2))
-        
-        print(f"Found {value_exists1} for annotations1, and {value_exists2} for annotations2.")
-        print(f"Found {len(paired_values)} items (at level={level}) with both annotations out of {total_items} total.")
-        
-        # Convert joint counts to DataFrame (confusion matrix)
-        unique_vals1 = sorted(list(set([k[0] for k in joint_counts.keys()])))
-        unique_vals2 = sorted(list(set([k[1] for k in joint_counts.keys()])))
-        
-        matrix = pd.DataFrame(0, index=unique_vals1, columns=unique_vals2)
-        for (val1, val2), count in joint_counts.items():
-            matrix.loc[val1, val2] = count
+                        # Add all pairwise combinations for list values
+                        combination_pairs.extend(_create_pairwise_combinations(
+                            conv.conversation_id, val1, val2
+                        ))
+                        annotation_pairs.append((
+                            conv.conversation_id, 
+                            sorted(val1) if isinstance(val1, list) else val1, 
+                            sorted(val2) if isinstance(val2, list) else val2,
+                        ))
             
+            else:  # level == "message"
+                for conv in self.data:
+                    for msg in conv.conversation:
+                        total_items += 1
+                        
+                        val1 = msg.metadata.get(full_name1).value if full_name1 in msg.metadata else None
+                        val2 = msg.metadata.get(full_name2).value if full_name2 in msg.metadata else None
+                        value_exists1 += 1 if val1 is not None else 0
+                        value_exists2 += 1 if val2 is not None else 0
+                        
+                        if val1 is not None and val2 is not None:
+                            combination_pairs.extend(
+                                _create_pairwise_combinations(f"{conv.conversation_id}-{msg.turn}", val1, val2))
+                            annotation_pairs.append((
+                                f"{conv.conversation_id}-{msg.turn}", 
+                                sorted(val1) if isinstance(val1, list) else val1,
+                                sorted(val2) if isinstance(val2, list) else val2,
+                            ))
+            
+            if verbose:
+                print(f"Found {value_exists1} items with `{source1}-{name1}`, and {value_exists2} with `{source2}-{name2}`.")
+                print(f"Generated {len(annotation_pairs)} label-level pairs (at level={level}) out of {total_items} total items.")
+            return annotation_pairs, combination_pairs
+
+        annotation_pairs, combination_pairs = _get_annotation_pairs()
+
+        # Create confusion matrix DataFrame
+        matrix = _create_confusion_matrix(combination_pairs)
+        
         # Compute agreement metrics if requested
         if compute_disagreement:
-            metrics = self._compute_annotator_disagreement(paired_values)
-            disagreement_rows = [(uid, val1, val2) for (uid, val1, val2) in paired_values if val1 != val2]
-            return matrix, metrics, disagreement_rows
+            metrics = _compute_annotator_disagreement(annotation_pairs)
+            return matrix, metrics, annotation_pairs
         else:
-            return matrix
+            return matrix, annotation_pairs
 
-    def _compute_annotator_disagreement(
-        self, paired_values
-    ):
-        metrics = {}
 
-        # Overall agreement
-        uids, vals1, vals2 = zip(*paired_values)
-        metrics["agreement_rate"] = sum(v1 == v2 for uid, v1, v2 in paired_values) / len(paired_values)
-        
-        # Try to compute Cohen's Kappa if possible
-        try:
-            metrics["cohens_kappa"] = cohen_kappa_score(vals1, vals2)
-        except Exception as e:
-            metrics["cohens_kappa_error"] = str(e)
-            
-        # Try to compute F1 scores if the values are binary
-        if set(vals1).issubset({0, 1}) and set(vals2).issubset({0, 1}):
-            cm = confusion_matrix(vals1, vals2)
-            tp = cm[1, 1]
-            fp = cm[0, 1]
-            fn = cm[1, 0]
-            precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-            recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-            f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
-            metrics["precision"] = precision
-            metrics["recall"] = recall
-            metrics["f1_score"] = f1
-        
-        return metrics
 

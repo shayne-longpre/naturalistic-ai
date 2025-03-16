@@ -1,10 +1,15 @@
+import os
 import sys
 import typing
 import json
+import re
+from collections import defaultdict
 
 sys.path.append("./")
 
 from src.classes.annotation_record import AnnotationRecord
+from src.helpers import io
+
 
 
 class AnnotationSet(object):
@@ -39,13 +44,36 @@ class AnnotationSet(object):
             name=data["name"], 
             level=data["level"],
             dataset_id=data["dataset_id"],
-            annotations=[AnnotationRecord(value=x["value"], target_id=x["target_id"]) for x in data["annotations"]],
+            annotations=[
+                AnnotationRecord(
+                    value=x["value"], 
+                    target_id=x["target_id"],
+                    annotator=x.get("annotator"),
+                ) 
+                for x in data["annotations"]],
         )
 
+
     @classmethod
-    def load_labelstudio(cls, json_path: str):
+    def load_labelstudio(cls, json_path: str, source: str):
         """Alternative constructor that initializes from LabelStudio file(s)."""
-        pass
+        # Parse all the Label Studio annotations together
+        annotations = parse_labelstudio_files(json_path)
+        
+        # Create a new instance with the remaining data
+        return cls(
+            source=source, 
+            name=data["name"], 
+            level=data["level"],
+            dataset_id=data["dataset_id"],
+            annotations=[
+                AnnotationRecord(
+                    value=x["value"], 
+                    target_id=x["target_id"],
+                    annotator=x.get("annotator"),
+                ) 
+                for x in data["annotations"]],
+        )
 
     @classmethod
     def load_automatic(cls, path: str):
@@ -75,3 +103,41 @@ class AnnotationSet(object):
         self.annotations = remapped_annotations
 
         
+
+def process_annotations_to_annotation_sets(annotations_list, source: str):
+    task_groups = {}
+    
+    for annotation in annotations_list:
+        if "annotation_tasks" not in annotation:
+            continue
+            
+        conv_id = annotation.get("conversation_id", "") or annotation.get("text_in_conversation_turn", {}).get("conversation_id", "")
+        turn_idx = annotation.get("text_in_conversation_turn", {}).get("turn", 0)
+        annotator = annotation.get("annotator_name", "")
+        
+        for task_category, task_values in annotation["annotation_tasks"].items():
+            if task_category not in task_groups:
+                task_groups[task_category] = []
+
+            task_groups[task_category].append({
+                "annotation_value": task_values,
+                "conversation_id": conv_id,
+                "turn_idx": turn_idx,
+                "annotator_name": annotator
+            })
+
+    return {
+        task_name: AnnotationSet(
+            source=source,
+            name=task_name,
+            level="message",
+            dataset_id="sample120",
+            annotations=[
+                AnnotationRecord(
+                    value=x["annotation_value"],
+                    target_id=f"{x['conversation_id']}-{x['turn_idx']}",
+                    annotator=x.get("annotator_name")
+                ) for x in data
+            ]
+        ) for task_name, data in task_groups.items()
+    }

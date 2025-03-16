@@ -1,7 +1,15 @@
+import sys
 import typing
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from tabulate import tabulate
+from collections import Counter
+
+sys.path.append("./")
+
+from src.helpers.constants import FUNCTION_ANNOTATION_LABEL_ABBREVIATIONS
 
 
 def barplot_distribution(
@@ -11,7 +19,9 @@ def barplot_distribution(
     ylabel: str = "",
     title: str = "",
     figsize: typing.Tuple[int, int] = (10, 6),
-    output_path: typing.Optional[str] = None
+    output_path: typing.Optional[str] = None,
+    order: typing.Optional[typing.Union[str, list]] = "descending",
+    max_labels: int = 20
 ) -> plt.Figure:
     """
     Plot a bar chart of annotation distribution.
@@ -24,11 +34,14 @@ def barplot_distribution(
         title: Plot title
         figsize: Figure size (width, height) in inches
         output_path: If provided, save the figure to this path
+        order: Order of x-axis categories - "ascending", "descending", or list of labels
+        max_labels: Maximum number of x-axis labels to display
 
     Returns:
         The Matplotlib Figure object.
     """
-    fig, ax = plt.subplots(figsize=figsize)
+    # Create figure with "constrained" layout
+    fig, ax = plt.subplots(figsize=figsize, layout='constrained')
     
     # Check if we have a single distribution or multiple
     if all(isinstance(v, (int, float)) for v in data.values()):
@@ -39,6 +52,22 @@ def barplot_distribution(
         if normalize:
             total = sum(values)
             values = [v / total for v in values]
+        
+        # Handle ordering
+        if order == "ascending":
+            sorted_data = sorted(zip(categories, values), key=lambda x: x[1])
+            categories, values = zip(*sorted_data) if sorted_data else ([], [])
+        elif order == "descending":
+            sorted_data = sorted(zip(categories, values), key=lambda x: x[1], reverse=True)
+            categories, values = zip(*sorted_data) if sorted_data else ([], [])
+        elif isinstance(order, list):
+            # Reorder according to provided list
+            ordered_data = {k: data.get(k, 0) for k in order if k in data}
+            categories = list(ordered_data.keys())
+            values = list(ordered_data.values())
+            if normalize and values:
+                total = sum(values)
+                values = [v / total for v in values]
             
         ax.bar(categories, values)
         
@@ -57,21 +86,44 @@ def barplot_distribution(
             
         all_data = pd.concat(dfs)
         
-        # Plot grouped bar chart
-        sns.barplot(x='Category', y='Count', hue='Source', data=all_data, ax=ax)
+        # Handle ordering for the DataFrame case
+        if order == "ascending":
+            # Get total count per category across all sources
+            category_totals = all_data.groupby('Category')['Count'].sum().reset_index()
+            order_list = category_totals.sort_values('Count')['Category'].tolist()
+            sns.barplot(x='Category', y='Count', hue='Source', data=all_data, ax=ax, order=order_list)
+        elif order == "descending":
+            category_totals = all_data.groupby('Category')['Count'].sum().reset_index()
+            order_list = category_totals.sort_values('Count', ascending=False)['Category'].tolist()
+            sns.barplot(x='Category', y='Count', hue='Source', data=all_data, ax=ax, order=order_list)
+        elif isinstance(order, list):
+            valid_order = [cat for cat in order if cat in all_data['Category'].unique()]
+            sns.barplot(x='Category', y='Count', hue='Source', data=all_data, ax=ax, order=valid_order)
+        else:
+            sns.barplot(x='Category', y='Count', hue='Source', data=all_data, ax=ax)
+            
         ax.legend(title='')  # Remove legend title if desired
     
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
-    ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
+    ax.tick_params(axis='x', rotation=90)
     
-    fig.tight_layout()
+    # Limit the number of x-axis labels if needed
+    if len(ax.get_xticklabels()) > max_labels:
+        # Keep only max_labels number of labels
+        n_labels = len(ax.get_xticklabels())
+        keep_indices = np.linspace(0, n_labels-1, max_labels, dtype=int)
+        labels = [item.get_text() for item in ax.get_xticklabels()]
+        ax.set_xticks([i for i in keep_indices])
+        ax.set_xticklabels([labels[i] for i in keep_indices])
     
     # Save the plot if an output path is provided
     if output_path is not None:
-        fig.savefig(output_path)
+        fig.savefig(output_path, bbox_inches='tight')
     
+    # Return the figure but prevent automatic display in Jupyter
+    plt.close(fig)
     return fig
 
 
@@ -110,30 +162,104 @@ def plot_confusion_matrix(
     # Plot heatmap
     sns.heatmap(matrix, annot=True, fmt='.2f' if normalize else 'd', cmap=cmap, ax=ax)
     ax.set_xlabel(xlabel)
+    ax.tick_params(axis='x', rotation=90)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     
-    fig.tight_layout()
+    # fig.tight_layout()
     
     # Save the figure if an output path is provided
     if output_path is not None:
         fig.savefig(output_path)
-    
+
+    # Return the figure but prevent automatic display in Jupyter
+    plt.close(fig)
     return fig
 
 
-def tabulate_interrater_metrics(metrics: typing.Dict[str, float]) -> None:
+
+def analyze_pair_annotations(
+    annotations: typing.List[typing.Tuple[str, typing.Any, typing.Any]]
+) -> pd.DataFrame:
     """
-    Print a nicely formatted table of inter-rater reliability metrics.
+    Analyze pairs of annotations and produce a CSV report in descending order of frequency.
     
-    Args:
-        metrics: Dictionary of metric names to values
+    Parameters:
+    -----------
+    annotations : List[Tuple[str, Any, Any]]
+        List of tuples in the format (uid, val1, val2) where val1 and val2 can be 
+        ints, strings, bools, or lists
+    output_file : str, optional
+        Path to the output CSV file, default is "annotation_analysis.csv"
+    
+    Returns:
+    --------
+    pd.DataFrame
+        DataFrame containing the analysis results
     """
-    print("\n=== Inter-rater Agreement Metrics ===")
-    for metric, value in metrics.items():
-        # Format percentage metrics for better readability
-        if 'percentage' in metric or 'precision' in metric or 'recall' in metric or 'f1' in metric or 'rate' in metric:
-            print(f"{metric.replace('_', ' ').title()}: {float(value):.2f}")
-        else:
-            print(f"{metric.replace('_', ' ').title()}: {float(value):.4f}")
-    print("=====================================")
+    # Convert annotations for counting
+    normalized_pairs = []
+    for uid, val1, val2 in annotations:
+        norm_val1 = tuple(sorted(val1)) if isinstance(val1, list) else val1
+        norm_val2 = tuple(sorted(val2)) if isinstance(val2, list) else val2
+        normalized_pairs.append((uid, norm_val1, norm_val2) if norm_val1 < norm_val2 else (uid, norm_val2, norm_val1))
+    
+    # Count the occurrences of each pair
+    pair_counts = Counter([(v1, v2) for _, v1, v2 in normalized_pairs])
+    
+    # Create result data
+    results = []
+    for (val1, val2), count in pair_counts.most_common():
+        results.append({
+            'val1': list(val1) if isinstance(val1, tuple) else val1,
+            'val2': list(val2) if isinstance(val2, tuple) else val2,
+            'count': count,
+            'percent_of_all': round((count / len(annotations)) * 100, 2),
+            'matching': val1 == val2
+        }) 
+    return pd.DataFrame(results)
+
+
+def tabulate_annotation_pair_summary(
+    df: pd.DataFrame, 
+    num_rows: int = None,
+    max_chars: int = 30
+) -> str:
+    """
+    Format a DataFrame for display with controlled number of rows and shortened values.
+    
+    Parameters:
+    -----------
+    df: DataFrame containing the annotation analysis results
+    num_rows : int, optional—Number of rows to display. If None, display all rows
+    max_chars : int, optional
+        Maximum number of characters allowed for val1/val2 before shortening.
+        If a value exceeds this length, each word will be shortened to its first letter.
+    """
+    display_df = df.copy()
+    
+    def shorten_value(val):
+        # For lists, calculate the total length of all elements
+        if isinstance(val, list) and sum(len(str(item)) for item in val) > max_chars:
+            # Shorten each word in each item to its first letter
+            ret_val = []
+            for item in val:
+                abbrev = FUNCTION_ANNOTATION_LABEL_ABBREVIATIONS.get(item.lower())
+                abbrev_backup = ' '.join(word[:3] for word in str(item).split())
+                ret_val.append(abbrev if abbrev is not None else abbrev_backup)
+            return ret_val
+        elif isinstance(val, str) and len(val) > max_chars:
+            return ' '.join(word[:4] for word in val.split())
+        return val
+    
+    # Apply shortening to val1 and val2 columns
+    display_df['val1'] = display_df['val1'].apply(shorten_value)
+    display_df['val2'] = display_df['val2'].apply(shorten_value)
+    
+    # Limit rows if specified
+    if num_rows is not None:
+        display_df = display_df.head(num_rows)
+    
+    # Format boolean values as "T"/"F" for better readability
+    display_df['matching'] = display_df['matching'].map({True: 'T', False: 'F'})
+    return tabulate(display_df, headers='keys', tablefmt='grid', showindex=False)

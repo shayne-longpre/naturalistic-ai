@@ -1,2 +1,46 @@
 SYSTEM_PROMPTS_FPATH = "data/static/system_prompts.json"
 DETAILED_SYSTEM_PROMPTS_FPATH = "data/static/detailed_system_prompts.json"
+
+
+
+FUNCTION_ANNOTATION_LABEL_ABBREVIATIONS = {
+    "information retrieval: general info from web": "IR: web",
+    "information retrieval: general info from prompt content": "IR: prompt",
+    "content generation: brainstorming / ideation": "Gen: ideas",
+    "content generation: creative / fiction writing": "Gen: creative",
+    "content generation: non-fiction / academic / essay writing": "Gen: academic",
+    "content generation: administrative writing": "Gen: admin",
+    "content generation: code": "Gen: code",
+    "content generation: code documentation": "Gen: code doc",
+    "content generation: prompts for another ai system": "Gen: prompts",
+    "content generation: general prose, discussion or explanation": "Gen: prose",
+    "content generation: other": "Gen: other",
+    "editorial & formatting: natural language content editing": "E&F: NL edit",
+    "editorial & formatting: natural language style or re-formatting": "E&F: NL style",
+    "editorial & formatting: code content editing": "E&F: code edit",
+    "editorial & formatting: code style and re-formatting": "E&F: code style",
+    "editorial & formatting: content summarization": "E&F: summarize",
+    "editorial & formatting: content expansion": "E&F: expand",
+    "editorial & formatting: information processing & re-formatting": "E&F: reformat",
+    "information analysis: content explanation / interpretation": "Analysis: explain",
+    "information analysis: content quality review or assessment": "Analysis: review",
+    "information analysis: content classification": "Analysis: class",
+    "information analysis: ranking or scoring": "Analysis: rank",
+    "information analysis: other content analysis / description": "Analysis: other",
+    "translation (language to language)": "Translate",
+    "role-play / social simulation: platonic companion / friend": "RP: friend",
+    "role-play / social simulation: romantic companion": "RP: romantic",
+    "role-play / social simulation: simulation of real person / celebrity": "RP: celebrity",
+    "role-play / social simulation: user study persona simulations or polling": "RP: persona",
+    "role-play / social simulation: therapist / coach": "RP: therapist",
+    "advice, guidance, & recommendations: instructions / how-to": "Advice: how-to",
+    "advice, guidance, & recommendations: social and personal advice": "Advice: personal",
+    "advice, guidance, & recommendations: professional advice": "Advice: prof",
+    "advice, guidance, & recommendations: activity / product recommendations": "Advice: product",
+    "advice, guidance, & recommendations: action planning (scheduling, robotics)": "Advice: planning",
+    "reasoning: mathematical or numerical problem solving": "Reason: math",
+    "reasoning: verbal problems, logic games, puzzles or riddles": "Reason: logic",
+    "reasoning: other general problem solving": "Reason: general",
+    "no clear task": "Unclear",
+    "other": "Other"
+}

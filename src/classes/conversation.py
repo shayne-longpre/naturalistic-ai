@@ -4,6 +4,7 @@ import typing
 sys.path.append("./")
 
 from src.classes.message import Message
+from src.classes.annotation_record import AnnotationRecord
 
 class Conversation(object):
     """A conversation object, with all metadata."""
@@ -16,6 +17,7 @@ class Conversation(object):
         time,
         model,
         conversation,
+        languages=None, # TODO: Remove.
         geography=None,
         metadata={},
     ):
@@ -34,7 +36,11 @@ class Conversation(object):
                     role=m["role"], 
                     content=m["content"], 
                     timestamp=m.get("timestamp"), 
-                    metadata=m.get("metadata", {}),
+                    metadata={k: AnnotationRecord(
+                        value=vs["value"],
+                        target=vs["target"],
+                        annotator=vs.get("annotator")
+                    ) for k, vs in m.get("metadata", {}).items()},
                 ) 
                 for m in conversation
             ]
@@ -44,7 +50,7 @@ class Conversation(object):
         self.geography = geography
         self.metadata = metadata
 
-    def to_dict(self, unpack_conversation=False):
+    def to_dict(self):
         obj = {
             "conversation_id": self.conversation_id,
             "dataset_id": self.dataset_id,
@@ -52,7 +58,7 @@ class Conversation(object):
             "time": self.time,
             "model": self.model,
             "geography": self.geography,
-            "metadata": self.metadata
+            "metadata": {k: v.to_dict() for k, v self.metadata.items()}
         }
         obj["conversation"] = [m.to_dict() for m in self.conversation]
         return obj
