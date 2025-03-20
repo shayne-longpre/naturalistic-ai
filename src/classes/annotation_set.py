@@ -77,8 +77,25 @@ class AnnotationSet(object):
 
     @classmethod
     def load_automatic(cls, path: str):
-        """Alternative constructor that initializes from automatic annotation file(s)."""
-        pass
+        """Alternative constructor that initializes from AIArchive automatic annotation file(s)."""
+        annotations = []
+
+        with open(path, 'r', encoding='utf-8') as file:
+            for line in file:
+                record = json.loads(line.strip())
+                instance = cls(
+                    source=path, 
+                    name=record["model"], 
+                    level=record["system_level_id"],
+                    dataset_id=record["dataset_id"],
+                    annotations=AnnotationRecord(
+                        value=record["response"], 
+                        target_id=record["system_prompt_id"],
+                        annotator=record["model_id"],
+                    ),
+                )
+                annotations.append(instance)
+        return annotations
 
     def to_dict(self):
         return {
