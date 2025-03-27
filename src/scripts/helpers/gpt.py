@@ -3,7 +3,6 @@ import openai
 import json
 import asyncio
 import aiohttp
-import requests
 import tiktoken
 from dotenv import load_dotenv
 
