@@ -6,6 +6,7 @@ import aiohttp
 import tiktoken
 from dotenv import load_dotenv
 
+
 class GPT(object):
     """
     This class provides an interface to the OpenAI API to perform text generation tasks using various GPT models. 
