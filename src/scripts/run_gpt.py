@@ -11,41 +11,31 @@ sys.path.append("src/")
 
 
 def make_prompt(args):
-    START_DIVIDER = f"<START_{args.level_id}>"
-    END_DIVIDER = f"<END_{args.level_id}>"
-    
-    PREAMBLE = f"""You are a high-quality annotation assistant. Your task is to annotate conversation logs between users and AI chatbots. You will be given a specific task description, its taxonomy of possible options, and then part of the conversation: either a prompt, an assistant response, or a full conversation turn. These might be pulled from any part of a multi-turn conversation.As a high-quality annotator you will diligently provide annotations that are:
-    1. Comprehensive: You will list all relevant annotations as the tasks are all multi-label. Pay special attention to subtle, or implied properties of the input conversation. 
-    2. Precise: You must answer as a JSON list of exact label name(s) without any additional explanation, reasoning, or text.
-    3. Calibrated: Reflect appropriate confidence in your annotation. If the input is ambiguous or open to multiple interpretations, acknowledge that explicitly.
-    The conversation log is enclosed between {START_DIVIDER} and {END_DIVIDER} tags.
-    Only use information present or inferable from the input. Avoid hallucinations or unjustified assumptions."""
+    PREAMBLE = f"""You are a high-quality annotation assistant. Your task is to annotate conversation logs between users and AI chatbots. You will be given a specific task description, all possible label options for the task, and a part of the conversation, including the user prompt and model response from both previous and current turns. These might be pulled from any part of a multi-turn conversation. As a high-quality annotator you will diligently provide annotations on the current turn that are:
+1. Comprehensive: You will list all relevant annotations as the tasks can be multi-class (only one label is true) or multi-label (multiple categories can be true at once). Pay special attention to subtle, or implied properties of the input conversation. 
+2. Precise: You must answer as a JSON list of dictionaries of exact labels name(s) and confidence (a score between 0 and 1) without any additional explanation, reasoning, or text.
+3. Calibrated: Reflect appropriate confidence in your annotation. If the input is ambiguous or open to multiple interpretations, acknowledge that explicitly.
+The conversation log is enclosed between <START_CONVERSATION> and <END_CONVERSATION> tags. The previous conversation turn is enclosed between <START_PREVIOUS_TURN> and <END_PREVIOUS_TURN> tags, while the current conversation turn is enclosed between <START_CURRENT_TURN> and <END_CURRENT_TURN> tags.
+The previous conversation turn is provided for context; however, generate an annotation only for the current {args.level_id}. 
+Only use information present or inferable from the input. Avoid hallucinations or unjustified assumptions."""
 
-    PREAMBLE_CONF = f"""You are a high-quality annotation assistant. Your task is to annotate conversation logs between users and AI chatbots. You will be given a specific task description, its taxonomy of possible options, and then part of the conversation: either a prompt, an assistant response, or a full conversation turn. These might be pulled from any part of a multi-turn conversation.As a high-quality annotator you will diligently provide annotations that are:
-    1. Comprehensive: You will list all relevant annotations as the tasks are all multi-label. Pay special attention to subtle, or implied properties of the input conversation. 
-    2. Precise: You must answer as a JSON list of dictionaries of exact labels name(s) and confidence (a score between 0 and 1) without any additional explanation, reasoning, or text.
-    3. Calibrated: Reflect appropriate confidence in your annotation. If the input is ambiguous or open to multiple interpretations, acknowledge that explicitly.
-    The conversation log is enclosed between {START_DIVIDER} and {END_DIVIDER} tags.
-    Only use information present or inferable from the input. Avoid hallucinations or unjustified assumptions."""
-
-    JSON_INSTRUCTION = f"Return the answer as a JSON list of exact label name(s) before ':' and after '- '. Do not include any explanation, reasoning, or additional text."
-    JSON_INSTRUCTION_CONF = f"Return the answer as a JSON list of dictionaries, each with the fields 'labels' (exact label name(s) before ':' and after '- ') and 'confidence' (a score between 0 and 1). Do not include any explanation, reasoning, or additional text."
+    JSON_INSTRUCTION = f"Return the answer as a JSON list of dictionaries, each with the fields 'labels' (exact label name(s) before ':' and after '- ') and 'confidence' (a score between 0 and 1). Do not include any explanation, reasoning, or additional text."
 
     TASK_DESCRIPTION = {
         "prompt": {
-            "media_format": "Label all types of media that are present in the user prompt, from the list of options below.",
-            "interaction_features": "Label all types of interaction features that are present in the user prompt, from the list of options below.",
-            "topic": "Label all topics that are clearly present in the user prompt, from the list of options below. This includes the topic of the task (e.g., creative writing would be 'Literature & Writing') and any other topics present in the content of that writing.",
+            "media_format": "Label all types of media that are present in the current user prompt, from the list of options below.",
+            "interaction_features": "Label all types of interaction features that are present in the current user prompt, from the list of options below.",
+            "topic": "Label all topics that are clearly present in the current user prompt, from the list of options below. This includes the topic of the task (e.g., creative writing would be 'Literature & Writing') and any other topics present in the content of that writing.",
             "multi_turn_relationship": "Label one type of relationship that is present between the previous user prompt and the current user prompt in the conversation, from the list of options below.",
         },
         "response": {
-            "media_format": "Label all types of media that are present in the model response, from the list of options below.",
-            "interaction_features": "Label all types of interaction features that are present in the model response, from the list of options below. Only count these if they are part of the model's communication to the user rather than part of solicited content, like a translation, movie script, or a role it is playing.",
-            "answer_form": "Label one type of answer format that represents how the model responds in the conversation, from the list of options below.",
+            "media_format": "Label all types of media that are present in the current model response, from the list of options below.",
+            "interaction_features": "Label all types of interaction features that are present in the current model response, from the list of options below. Only count these if they are part of the model's communication to the user rather than part of solicited content, like a translation, movie script, or a role it is playing.",
+            "answer_form": "Label one type of answer format that represents how the model responds in the current turn, from the list of options below.",
         },
         "turn": {
-            "topic": "Label all topics that are present in the conversation turn, from the list of options below.",
-            "sensitive_use_flags": "Label all instances of sensitive content in the conversation turn, from the list of options below. Please flag any content that relates to these categories, even if it was not inherent in the request: e.g. if the user asks the system to count the words in a violent or sexual story, or if the user asks the system to answer a list of questions (e.g., homework).",
+            "topic": "Label all topics that are present in the current conversation turn, from the list of options below.",
+            "sensitive_use_flags": "Label all instances of sensitive content in the current conversation turn, from the list of options below. Please flag any content that relates to these categories, even if it was not inherent in the request: e.g. if the user asks the system to count the words in a violent or sexual story, or if the user asks the system to answer a list of questions (e.g., homework).",
         }
     }
 
@@ -69,98 +59,75 @@ def make_prompt(args):
     task_description = TASK_DESCRIPTION[args.level_id][args.prompt_id]
     options = OPTIONS[args.level_id][args.prompt_id]
 
-    if args.confidence:
-        prompt = f"""{PREAMBLE_CONF}
+    prompt = f"""{PREAMBLE}
 
 Task description: {task_description}
 Options: {options}
 
-{START_DIVIDER}
+<START_CONVERSATION>
 
-{{text}}
+<START_PREVIOUS_TURN>
+{{prev_text}}
+<END_PREVIOUS_TURN>
 
-{END_DIVIDER}
+<START_CURRENT_TURN>
+{{curr_text}}
+<END_CURRENT_TURN>
 
-{JSON_INSTRUCTION_CONF}
-Response: """
-    else:
-        prompt = f"""{PREAMBLE}
-
-Task description: {task_description}
-Options: {options}
-
-{START_DIVIDER}
-
-{{text}}
-
-{END_DIVIDER}
+<END_CONVERSATION>
 
 {JSON_INSTRUCTION}
 Response: """
     return prompt
 
 
+def format_conversation_turns(conversation):
+    pairs = []
+    for i in range(0, len(conversation) - 1, 2):
+        user_turn = conversation[i]
+        assistant_turn = conversation[i + 1] if i + 1 < len(conversation) else None
+        if user_turn["role"] == "user" and assistant_turn and assistant_turn["role"] == "assistant":
+            pairs.append((user_turn["text"], assistant_turn["text"]))
+
+    formatted_turns = []
+    for i in range(len(pairs)):
+        # Previous turn
+        if i == 0:
+            prev_user = "None"
+            prev_assistant = "None"
+        else:
+            prev_user, prev_assistant = pairs[i - 1]
+
+        # Current turn
+        curr_user, curr_assistant = pairs[i]
+
+        prev_text = f"Previous user prompt: {prev_user}\nPrevious model response: {prev_assistant}"
+        curr_text = f"Current user prompt: {curr_user}\nCurrent model response: {curr_assistant}"
+
+        formatted_turns.append((prev_text, curr_text))
+    return formatted_turns
+
+
 def extract_samples_and_metadata(args, dataframe, existing_ex_ids):
     sample, metadata = [], []
-    
-    level_map = {
-        "prompt": lambda row: [
-            turn["text"]
-            for turn in row["conversation"] if turn["role"] == "user" or turn["role"] == "human" and valid_turn(turn["text"])
-        ],
-        "response": lambda row: [
-            turn["text"]
-            for turn in row["conversation"] if turn["role"] == "assistant" or turn["role"] == "gpt" and valid_turn(turn["text"])
-        ],
-        "turn": lambda row: [
-            f"[{row['conversation'][i]['role']}] {row['conversation'][i]['text']} "
-            f"[{row['conversation'][i+1]['role']}] {row['conversation'][i+1]['text']}"
-            for i in range(len(row['conversation']) - 1)
-            if valid_turn(row['conversation'][i]['text']) and valid_turn(row['conversation'][i+1]['text'])
-        ],
-    }
 
     for _, row in dataframe.iterrows():
         if row["ex_id"] in existing_ex_ids:
             continue
-        
-        data_list = []
-        prompt = make_prompt(args)
-        print("Prompt: ", prompt)
-        if args.prompt_id == "multi_turn_relationship":
-            user_turns = [turn["text"] for turn in row["conversation"] if turn["role"] == "user" or turn["role"] == "human" and valid_turn(turn["text"])]
-            prev_prompts = []
-            
-            for current_text in user_turns:
-                prev_prompts_str = " ".join(prev_prompts) if prev_prompts else "[NONE]"
-                placeholders = {"{text}": "Previous turn: " + prev_prompts_str + "Current turn: " + current_text}
-                for placeholder, value in placeholders.items():
-                    formatted_prompt = prompt.replace(placeholder, value)
-                
-                sample.append(formatted_prompt)
-                metadata.append({
-                    "ex_id": row["ex_id"],
-                    "dataset_id": row["dataset_id"],
-                    "model": row["model"]
-                })
-                prev_prompts.append(current_text)
-        else:
-            if args.level_id not in level_map:
-                raise ValueError("Invalid system_level_id. Must be one of: conversation, prompt, response, turn.")
-            
-            extractor = level_map[args.level_id]
-            data_list = extractor(row)
 
-            for data in data_list:
-                placeholders = {"{text}": data}
-                for placeholder, value in placeholders.items():
-                    formatted_prompt = prompt.replace(placeholder, value)
-                sample.append(formatted_prompt)
-                metadata.append({
-                    "ex_id": row["ex_id"],
-                    "dataset_id": row["dataset_id"],
-                    "model": row["model"]
-                })
+        conversation = row["conversation"]
+        formatted_pairs = format_conversation_turns(conversation)
+
+        for prev_text, curr_text in formatted_pairs:
+            prompt = make_prompt(args)
+            prompt = prompt.replace("{prev_text}", prev_text).replace("{curr_text}", curr_text)
+
+            sample.append(prompt)
+            metadata.append({
+                "ex_id": row["ex_id"],
+                "dataset_id": row["dataset_id"],
+                "model": row["model"]
+            })
     return sample, metadata
 
 
@@ -184,7 +151,9 @@ async def run_gpt(args, batch_size=1):
             continue
         
         batch_output = []
+        print("Prompt: ", batch[0])
         for response, meta in zip(batch_responses, meta_batch):
+            print("Response: ", response)
             response_entry = {
                 **meta,
                 "model_id": args.model_id,
@@ -205,8 +174,7 @@ if __name__ == "__main__":
     parser.add_argument("--input", type=str, required=True, help="Path to the input json file.")
     parser.add_argument("--level_id", required=True, default=None)
     parser.add_argument("--prompt_id", required=True, default=None)
-    parser.add_argument("--model_id", required=True, default=None, choices=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"])
-    parser.add_argument( "--confidence", action="store_true")
+    parser.add_argument("--model_id", required=True, default=None, choices=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o3-mini"])
     parser.add_argument("--save", type=str, required=True, help="Save path.")
     args = parser.parse_args()
 
