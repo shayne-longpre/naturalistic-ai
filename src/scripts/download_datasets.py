@@ -256,6 +256,33 @@ def download_mmlu():
     
     return conversations_to_return
 
+# Download HLE
+import json
+def download_hle():
+    print("Starting Download for HLE (Humanity's Last Exam)...")
+    dset = io.huggingface_download('cais/hle', split='test')
+
+    def process_data(datum):
+        conv = [{
+            "role": "user",
+            "turn": 1, 
+            "text": datum.get("question"),
+            "image": datum.get("image") if datum.get("image") else ''
+            }]
+        
+        return Conversation(
+            ex_id="hle_" + datum.get('id'),
+            dataset_id="hle",
+            user_id=str(datum.get('author_name')),
+            time="02/11/2025", # huggingface release date
+            model=None,
+            conversation=conv,
+            geography="Unknown",
+            languages="English"
+        )
+    
+    
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing Humanity's Last Exam")]
 
 DOWNLOAD_FUNCTIONS = {
     "wildchat_v1": download_wildchat_v1,
@@ -263,7 +290,8 @@ DOWNLOAD_FUNCTIONS = {
     "sharegpt_v1": download_sharegpt_v1,
     "chatbot_arena": download_chatbot_arena,
     "alpaca_eval": download_alpaca_eval,
-    "mmlu": download_mmlu
+    "mmlu": download_mmlu,
+    "hle": download_hle
 }
 
 
@@ -280,7 +308,8 @@ def main(dataset_id:str, sample: int, dataset_folder:str, save_path_overwrite: s
 
     # Write to file 
     dset = Dataset(dataset_id=dataset_id, data = data)
-    dset.write_to_file(data = data, dataset_folder=dataset_folder, save_path_overwrite = save_path_overwrite, dataset_file_type = dataset_file_type)
+    
+    dset.write_to_file(dataset_folder=dataset_folder, save_path_overwrite = save_path_overwrite, dataset_file_type = dataset_file_type)
     
 
 if __name__ == "__main__":
