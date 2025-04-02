@@ -32,7 +32,8 @@ def download_lmsys_1m():
             {
                 "role": msg.get("role"),
                 "turn": idx +1, # start at 1 for consistency
-                "text": msg.get("content", "")
+                "text": msg.get("content", ""),
+                "image": ''
             }
             for idx, msg in enumerate(datum.get("conversation", []))
         ]
@@ -65,7 +66,8 @@ def download_wildchat_v1():
             {
                 "role": msg.get("role"),
                 "turn": idx +1, # start turn count at 1
-                "text": msg.get("content", "")
+                "text": msg.get("content", ""),
+                "image": ''
             }
             for idx, msg in enumerate(datum.get("conversation", []))
         ]
@@ -113,7 +115,8 @@ def download_sharegpt_v1():
             conversation.append({
                 "role": msg.get("from"),
                 "turn": idx + 1, # start turn count at 1
-                "text": msg.get("value", "")
+                "text": msg.get("value", ""), 
+                "image": msg.get("image", "") if msg.get("image") else ''
             })
 
         return Conversation(
@@ -140,6 +143,7 @@ def download_chatbot_arena():
         for statement in conv:
             statement["turn"] = turn_count
             statement["text"] = statement.pop("content")
+            statement["image"] = ''
             turn_count = turn_count+1
             conv_with_turn.append(statement)
         return conv_with_turn
@@ -198,11 +202,13 @@ def download_alpaca_eval():
         conv = [{
                 "role": "user",
                 "turn": 1, 
-                "text": datum.get("instruction")
+                "text": datum.get("instruction"),
+                "image": ''
                 }, {
                 "role": "assistant",
                 "turn": 1, 
-                "text": datum.get("output")
+                "text": datum.get("output"),
+                "image": ''
                 }]
 
         
@@ -232,7 +238,8 @@ def download_mmlu():
             conv = [{
                     "role": "user",
                     "turn": 1, 
-                    "text": datum.get("question") + " " + " ".join(f"{choice_indiciators[i]} {datum.get("choices")[i]}" for i in range(len(datum.get("choices"))))
+                    "text": datum.get("question") + " " + " ".join(f"{choice_indiciators[i]} {datum.get("choices")[i]}" for i in range(len(datum.get("choices")))),
+                    "image": ''
                     }
                     ]
             print(conv)
@@ -257,7 +264,6 @@ def download_mmlu():
     return conversations_to_return
 
 # Download HLE
-import json
 def download_hle():
     print("Starting Download for HLE (Humanity's Last Exam)...")
     dset = io.huggingface_download('cais/hle', split='test')
@@ -284,6 +290,43 @@ def download_hle():
     
     return [process_data(datum) for datum in tqdm(dset, desc="Processing Humanity's Last Exam")]
 
+# Download GPQA
+def download_gpqa():
+    print("Starting Download for GPQA...")
+    dset = io.huggingface_download('Idavidrein/gpqa', 'gpqa_extended', split="train")
+
+    def process_data(datum):
+        choice_strings = ["Correct Answer", "Incorrect Answer 1", "Incorrect Answer 2", "Incorrect Answer 3"]
+        random.shuffle(choice_strings)
+
+        choices = [
+            f"a) {datum.get(choice_strings[0])}",
+            f"b) {datum.get(choice_strings[1])}",
+            f"c) {datum.get(choice_strings[2])}",
+            f"d) {datum.get(choice_strings[3])}"
+        ]
+        
+        conv = [{
+                "role": "user",
+                "turn": 1, 
+                "text": f"{datum.get('Question')}\nChoices:\n" + "\n".join(choices),
+                "image": ''
+                }]
+        
+
+        return Conversation(
+            ex_id="gpqa_" + datum.get('Record ID'),
+            dataset_id="gpqa",
+            user_id=str(datum.get('Question Writer')),
+            time="11/29/2023",
+            model=None,
+            conversation=conv,
+            geography="Unknown",
+            languages="English"
+        )
+    
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing GPQA")]
+
 DOWNLOAD_FUNCTIONS = {
     "wildchat_v1": download_wildchat_v1,
     "lmsys_1m": download_lmsys_1m,
@@ -291,7 +334,8 @@ DOWNLOAD_FUNCTIONS = {
     "chatbot_arena": download_chatbot_arena,
     "alpaca_eval": download_alpaca_eval,
     "mmlu": download_mmlu,
-    "hle": download_hle
+    "hle": download_hle, 
+    "gpqa": download_gpqa
 }
 
 

@@ -22,6 +22,7 @@ DATASET_LOCATIONS = {
     "alpaca_eval": "dataset_downloads/alpaca_eval",
     "mmlu": "dataset_downloads/mmlu",
     "hle": "dataset_downloads/hle",
+    "gpqa": "dataset_downloads/gpqa",
 }
 DATASET_CATEGORIES = {
     ### User Datasets ###
@@ -34,6 +35,7 @@ DATASET_CATEGORIES = {
     "alpaca_eval": "benchmark",
     "mmlu": "benchmark", 
     "hle": "benchmark",
+    "gpqa": "benchmark",
 }
 DATASET_SIZES = {
     ### User Datasets ###
@@ -46,6 +48,7 @@ DATASET_SIZES = {
     "alpaca_eval":  805,
     "mmlu": 14042, 
     "hle": 2700,
+    "gpqa": 546,
 }
 
 def filter_by_id(ids: list[str]):
