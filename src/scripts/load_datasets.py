@@ -24,6 +24,8 @@ DATASET_LOCATIONS = {
     "hle": "dataset_downloads/hle",
     "gpqa": "dataset_downloads/gpqa",
     "swebench": "dataset_downloads/swebench",
+    "math500": "dataset_downloads/math500",
+    "arc_agi_v2": "dataset_downloads/arc_agi_v2",
 }
 DATASET_CATEGORIES = {
     ### User Datasets ###
@@ -38,6 +40,8 @@ DATASET_CATEGORIES = {
     "hle": "benchmark",
     "gpqa": "benchmark",
     "swebench": "benchmark",
+    "math500": "benchmark",
+    "arc_agi_v2": "benchmark",
     
 }
 DATASET_SIZES = {
@@ -53,6 +57,8 @@ DATASET_SIZES = {
     "hle": 2700,
     "gpqa": 546,
     "swebench": 2294,
+    "math500": 500,
+    "arc_agi_v2": 100,
 }
 
 def filter_by_id(ids: list[str]):

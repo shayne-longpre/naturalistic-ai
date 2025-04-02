@@ -15,6 +15,11 @@ from dataset_utils import Conversation, Dataset
 
 from helpers import io
 import uuid
+import requests
+import json
+import shutil
+
+from bs4 import BeautifulSoup
 
 """
 This file is used to download and format datasets in a common format (list of Conversation objects). 
@@ -354,7 +359,145 @@ def download_swebench():
             languages="Unknown"
         )
     
-    return [process_data(datum) for datum in tqdm(dset, desc="Processing GPQA")]
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing SWE Bench")]
+
+# Download Math500
+def download_math500():
+    print("Starting Download for Math500...")
+    dset = io.huggingface_download('ankner/math-500', split="test")
+
+    def process_data(datum):
+        
+        conv = [{
+                "role": "user",
+                "turn": 1, 
+                "text": f"{datum.get('problem')}", 
+                "image": ''
+                }]
+        
+        id = str(uuid.uuid4())
+        return Conversation(
+            ex_id="math500_" + id,
+            dataset_id="math500",
+            user_id=id,
+            time="12/20/2024",
+            model=None,
+            conversation=conv,
+            geography="Unknown",
+            languages="English"
+        )
+    
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing Math500")]
+
+def download_arc_agi_v2(): 
+    # Because the data is hosted on github, we had to make a custom download function. Because this was completely specific to this particular dataset, I didn't want to add it as a general helper. 
+    def download_arc_agi_from_github():
+        # URL of the GitHub directory
+        github_url = "https://github.com/arcprize/ARC-AGI-2/tree/main/data/evaluation"
+
+        # Folder to save the downloaded JSON files
+        output_folder = "downloaded_json_files"
+        os.makedirs(output_folder, exist_ok=True)
+
+        # Get the HTML content of the GitHub directory
+        response = requests.get(github_url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Find all JSON file links
+        file_links = soup.find_all('a', href=True)
+        json_links = [
+            f"https://raw.githubusercontent.com{link['href'].replace('/blob', '')}"
+            for link in file_links if link['href'].endswith('.json')
+        ]
+
+        # Download each JSON file
+        
+        for json_url in tqdm(json_links, desc="Downloading JSON files"):
+            file_name = os.path.basename(json_url)
+            file_path = os.path.join(output_folder, file_name)
+            response = requests.get(json_url)
+            with open(file_path, 'wb') as file:
+                file.write(response.content)
+
+        # Folder containing the downloaded JSON files
+        input_folder = "downloaded_json_files"
+        output_file = "combined_data.jsonl"
+
+        # Open the output JSONL file for writing
+        with open(output_file, "w") as jsonl_file:
+            # Iterate through all JSON files in the folder
+            for filename in os.listdir(input_folder):
+                if filename.endswith(".json"):
+                    file_path = os.path.join(input_folder, filename)
+                    # Read the JSON file
+                    with open(file_path, "r") as json_file:
+                        data = json.load(json_file)
+                        # Write each JSON object as a line in the JSONL file
+                        if isinstance(data, list):
+                            for item in data:
+                                jsonl_file.write(json.dumps(item) + "\n")
+                        else:
+                            jsonl_file.write(json.dumps(data) + "\n")
+
+        print(f"All downloaded JSON files have been combined into {output_file} and now are being deleted.")
+
+        # Path to the folder to be deleted
+        folder_path = "downloaded_json_files"
+
+        # Delete the folder and its contents
+        shutil.rmtree(folder_path, ignore_errors=True)
+
+        print(f"Folder '{folder_path}' has been deleted.")
+        
+    def process_data(datum): 
+        """Process the data from the JSONL file and return a Conversation object."""
+        conv = [{
+                "role": "user",
+                "turn": 1, 
+                "text": f"Demonstration: {datum.get('train')} \nTest: {datum.get('test')}", 
+                "image": ''
+                }]
+        
+        id = str(uuid.uuid4())
+        return Conversation(
+            ex_id="arc_agi_v2_" + id,
+            dataset_id="arc_agi_v2",
+            user_id=id,
+            time="03/20/2025",
+            model=None,
+            conversation=conv,
+            geography="Unknown",
+            languages="Unknown"
+        )
+
+    # First, download the JSON files from the github repo and combine them into 1 JSONL file
+    download_arc_agi_from_github()
+
+    # Now, process the combined JSONL file as expected into a list of Conversation objects
+    
+    # Path to the combined JSONL file
+    file_path = "combined_data.jsonl"
+
+    # Initialize an empty list to store the modified objects
+    modified_objects = []
+
+    # Read the JSONL file and apply the function
+    with open(file_path, "r") as jsonl_file:
+        for line in jsonl_file:
+            # Parse the JSON object
+            data = json.loads(line.strip())
+            # Apply the modification function
+            modified_data = process_data(data)
+            # Append the modified object to the list
+            modified_objects.append(modified_data)
+
+    # Delete the combined JSONL file
+    os.remove(file_path)
+    print("Combined_data.jsonl file has been deleted now that the processed version has saved in the correct location.")
+    return modified_objects
+
+    
+
 DOWNLOAD_FUNCTIONS = {
     "wildchat_v1": download_wildchat_v1,
     "lmsys_1m": download_lmsys_1m,
@@ -364,7 +507,9 @@ DOWNLOAD_FUNCTIONS = {
     "mmlu": download_mmlu,
     "hle": download_hle, 
     "gpqa": download_gpqa, 
-    "swebench": download_swebench
+    "swebench": download_swebench, 
+    "math500": download_math500, 
+    "arc_agi_v2": download_arc_agi_v2,
 }
 
 
