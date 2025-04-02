@@ -23,6 +23,7 @@ DATASET_LOCATIONS = {
     "mmlu": "dataset_downloads/mmlu",
     "hle": "dataset_downloads/hle",
     "gpqa": "dataset_downloads/gpqa",
+    "swebench": "dataset_downloads/swebench",
 }
 DATASET_CATEGORIES = {
     ### User Datasets ###
@@ -36,6 +37,8 @@ DATASET_CATEGORIES = {
     "mmlu": "benchmark", 
     "hle": "benchmark",
     "gpqa": "benchmark",
+    "swebench": "benchmark",
+    
 }
 DATASET_SIZES = {
     ### User Datasets ###
@@ -49,6 +52,7 @@ DATASET_SIZES = {
     "mmlu": 14042, 
     "hle": 2700,
     "gpqa": 546,
+    "swebench": 2294,
 }
 
 def filter_by_id(ids: list[str]):

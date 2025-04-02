@@ -327,6 +327,34 @@ def download_gpqa():
     
     return [process_data(datum) for datum in tqdm(dset, desc="Processing GPQA")]
 
+
+# Download SWE-Bench
+def download_swebench():
+    print("Starting Download for SWE Bench...")
+    dset = io.huggingface_download('princeton-nlp/SWE-bench', split="test")
+
+    def process_data(datum):
+        
+        conv = [{
+                "role": "user",
+                "turn": 1, 
+                "text": f"Problem Statement: {datum.get('problem_statement')} \nRepo: {datum.get('repo')} \nBase_commit: {datum.get('base_commit')} \n",
+                "image": ''
+                }]
+        
+
+        return Conversation(
+            ex_id="swebench_" + datum.get('instance_id'),
+            dataset_id="swebench",
+            user_id=str(datum.get('repo')), # Is the repo a good indicator of user_id?
+            time=datum.get('created_at').isoformat() if isinstance(datum.get('timestamp'), datetime) else None,
+            model=None,
+            conversation=conv,
+            geography="Unknown",
+            languages="Unknown"
+        )
+    
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing GPQA")]
 DOWNLOAD_FUNCTIONS = {
     "wildchat_v1": download_wildchat_v1,
     "lmsys_1m": download_lmsys_1m,
@@ -335,7 +363,8 @@ DOWNLOAD_FUNCTIONS = {
     "alpaca_eval": download_alpaca_eval,
     "mmlu": download_mmlu,
     "hle": download_hle, 
-    "gpqa": download_gpqa
+    "gpqa": download_gpqa, 
+    "swebench": download_swebench
 }
 
 
