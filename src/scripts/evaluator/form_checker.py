@@ -1,5 +1,7 @@
 import json
 import re
+import os
+import csv
 import math
 import argparse
 from taxonomy import OPTIONS
@@ -49,24 +51,48 @@ def compute_gini(counts):
     return 1 - sum(p ** 2 for p in probs)
 
 
-def validate_entry(args, entry):
+def normalize_label(label):
+    return label.replace('- ', '-').strip()
+
+def label_in_options(label, options):
+    norm_label = normalize_label(label)
+    return any(norm_label == normalize_label(opt) or norm_label in normalize_label(opt) for opt in options)
+
+
+def validate_entry(entry, task_options):
     response_data = extract_json_from_response(entry['response'])
     if not isinstance(response_data, list):
-        return False, 'Invalid JSON list'
+        return False, 'Invalid JSON list', None
 
     for item in response_data:
         if not isinstance(item, dict):
-            return False, 'Item is not a dictionary'
+            return False, 'Item is not a dictionary', None
         if 'labels' not in item or 'confidence' not in item:
-            return False, 'Missing keys'
+            return False, 'Missing keys', None
         if not isinstance(item['confidence'], (int, float)) or not (0 <= item['confidence'] <= 1):
-            return False, 'Confidence out of range'
-        if item['labels'] not in task_options:
-            return False, f'Invalid option'
-    return True, 'Valid'
+            return False, 'Confidence out of range', None
+
+        if isinstance(item['labels'], list):
+            if not all(label_in_options(label, task_options) for label in item['labels']):
+                return False, 'Invalid option', item['labels']
+        elif isinstance(item['labels'], str):
+            if not label_in_options(item['labels'], task_options):
+                return False, 'Invalid option', item['labels']
+        else:
+            return False, 'Invalid option', item['labels']
+    return True, 'Valid', None
 
 
-def main(args, task_options):
+EXPECTED_INVALID_REASONS = [
+    'Invalid JSON list',
+    'Item is not a dictionary',
+    'Missing keys',
+    'Confidence out of range',
+    'Invalid option'
+]
+
+
+def main(args, task_options, level_id, prompt_id):
     total_count = 0
     invalid_reasons = Counter()
     confidence_buckets = Counter()
@@ -78,7 +104,7 @@ def main(args, task_options):
         for line in f:
             entry = json.loads(line)
             total_count += 1
-            is_valid, reason = validate_entry(args, entry)
+            is_valid, reason, _ = validate_entry(entry, task_options)
 
             if not is_valid:
                 invalid_reasons[reason] += 1
@@ -88,43 +114,104 @@ def main(args, task_options):
             predictions_per_row.append(len(response_data))
             for item in response_data:
                 confidence_buckets[bucket_confidence(item['confidence'])] += 1
-                label = item['labels']
-                all_labels.append(label)
-                label_freq[label] += 1
+                labels = item['labels']
 
-    # Print invalid reason summary
-    print(f"\nTotal entries: {total_count}")
-    if invalid_reasons:
-        print("\n======= Invalid Reason Summary =======")
-        for reason, count in invalid_reasons.items():
-            print(f'{reason}: {count}')
-    else:
-        print("All entries are correctly formatted.")
+                if isinstance(labels, list):
+                    for label in labels:
+                        all_labels.append(label)
+                        label_freq[label] += 1
+                else:  # string
+                    all_labels.append(labels)
+                    label_freq[labels] += 1
 
-    # Confidence bucket stats
-    if confidence_buckets:
-        print("\n======= Confidence Bucket (%) =======")
-        for bucket in ['[0.0-0.2)', '[0.2-0.4)', '[0.4-0.6)', '[0.6-0.8)', '[0.8-1.0]']:
-            percent = 100 * confidence_buckets[bucket] / sum(confidence_buckets.values())
-            print(f"{bucket}: {percent:.2f}%")
+    result = {
+        'level_id': level_id,
+        'prompt_id': prompt_id,
+        'total_entries': total_count,
+        'avg_preds_per_row': round(sum(predictions_per_row) / len(predictions_per_row), 2) if predictions_per_row else 0,
+        'unique_labels': f"{len(set(all_labels))} / {len(task_options)}",
+        'label_entropy': round(compute_entropy(label_freq), 4) if label_freq else 0,
+        'label_gini': round(compute_gini(label_freq), 4) if label_freq else 0,
+    }
 
-    # Multi-label stats
-    if predictions_per_row:
-        print("\n======= Multilabel Stats =======")
-        avg_preds = sum(predictions_per_row) / len(predictions_per_row)
-        print(f"Average number of predictions per row: {avg_preds:.2f}")
-        print(f"Unique labels predicted: {len(set(all_labels))} / {len(task_options)}")
-        print(f"Label entropy: {compute_entropy(label_freq):.4f}")
-        print(f"Label Gini index: {compute_gini(label_freq):.4f}")
+    # Add invalid reason counts
+    for reason in EXPECTED_INVALID_REASONS:
+        result[f'invalid_{reason}'] = invalid_reasons.get(reason, 0)
+
+    # Add confidence bucket distribution
+    total_conf = sum(confidence_buckets.values())
+    for bucket in ['[0.0-0.2)', '[0.2-0.4)', '[0.4-0.6)', '[0.6-0.8)', '[0.8-1.0]']:
+        percent = 100 * confidence_buckets[bucket] / total_conf if total_conf else 0
+        result[f'conf_{bucket}'] = round(percent, 2)
+
+    return result
     
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", type=str, required=True, help="Path to the input jsonl file.")
-    parser.add_argument("--level_id", required=True, default=None)
-    parser.add_argument("--prompt_id", required=True, default=None)
+    parser.add_argument("--input_dir", type=str, required=True, help="Directory containing input .jsonl files.")
+    parser.add_argument("--save", type=str, required=True, help="Name of csv file to save.")
     args = parser.parse_args()
 
-    task_options = extract_options(args.level_id, args.prompt_id)
-    main(args, task_options)
+    if not os.path.isdir(args.input_dir):
+        raise ValueError(f"Provided input path {args.input_dir} is not a directory.")
+
+    jsonl_files = [f for f in os.listdir(args.input_dir) if f.endswith('.jsonl')]
+    if not jsonl_files:
+        print("No .jsonl files found in the input directory.")
+        exit()
+
+    all_results = []
+
+    for filename in sorted(jsonl_files):
+        filepath = os.path.join(args.input_dir, filename)
+        basename = filename[:-6]
+        parts = basename.split('_', 1)
+        if len(parts) != 2:
+            print(f"Skipping file with unexpected format: {filename}")
+            continue
+
+        level_id, prompt_id = parts
+        try:
+            task_options = extract_options(level_id, prompt_id)
+            class TempArgs:
+                def __init__(self, input):
+                    self.input = input
+
+            temp_args = TempArgs(filepath)
+            result = main(temp_args, task_options, level_id, prompt_id)
+            all_results.append(result)
+
+        except Exception as e:
+            print(f"Error processing {filename}: {e}")
+
+
+    output_csv = os.path.join(args.save)
+    if all_results:
+        dynamic_keys = set()
+        for result in all_results:
+            for key in result:
+                if key.startswith('invalid_') or key.startswith('conf_'):
+                    dynamic_keys.add(key)
+
+        preferred_order = [
+            'level_id',
+            'prompt_id',
+            'total_entries',
+        ]
+        invalid_keys = [f'invalid_{reason}' for reason in EXPECTED_INVALID_REASONS]
+        confidence_keys = ['conf_[0.0-0.2)', 'conf_[0.2-0.4)', 'conf_[0.4-0.6)', 'conf_[0.6-0.8)', 'conf_[0.8-1.0]']
+        rest_keys = [
+            'avg_preds_per_row',
+            'unique_labels',
+            'label_entropy',
+            'label_gini'
+        ]
+
+        fieldnames = preferred_order + invalid_keys + confidence_keys + rest_keys
+
+        with open(output_csv, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
+            writer.writeheader()
+            writer.writerows(all_results)
