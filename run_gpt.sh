@@ -3,7 +3,7 @@ python -u src/scripts/run_gpt.py \
     --prompt_id media_format \
     --model_id o3-mini \
     --input data/static/test_cedric.json \
-    --save res/test_up_mf.jsonl > log/test.log;
+    --save res/tests/test_prompt_media_format.jsonl > log/tests/test_prompt_media_format.log;
 
 
 python -u src/scripts/run_gpt.py \
@@ -11,7 +11,7 @@ python -u src/scripts/run_gpt.py \
     --prompt_id answer_form \
     --model_id o3-mini \
     --input data/static/test_cedric.json \
-    --save res/test_mr_af.jsonl > log/test2.log;
+    --save res/tests/test_response_answer_form.jsonl > log/tests/test_response_answer_form.log;
 
 
 python -u src/scripts/run_gpt.py \
@@ -19,4 +19,4 @@ python -u src/scripts/run_gpt.py \
     --prompt_id topic \
     --model_id o3-mini \
     --input data/static/test_cedric.json \
-    --save res/test_t_t.jsonl > log/test3.log
+    --save res/tests/test_turn_topic.jsonl > log/tests/test_turn_topic.log
