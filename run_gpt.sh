@@ -1,4 +1,5 @@
 python -u src/scripts/run_gpt.py \
+    --input_format free \
     --level_id prompt \
     --prompt_id media_format \
     --model_id o3-mini \
@@ -7,6 +8,7 @@ python -u src/scripts/run_gpt.py \
 
 
 python -u src/scripts/run_gpt.py \
+    --input_format free \
     --level_id response \
     --prompt_id answer_form \
     --model_id o3-mini \
@@ -15,6 +17,7 @@ python -u src/scripts/run_gpt.py \
 
 
 python -u src/scripts/run_gpt.py \
+    --input_format free \
     --level_id turn \
     --prompt_id topic \
     --model_id o3-mini \

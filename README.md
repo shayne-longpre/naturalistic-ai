@@ -34,6 +34,7 @@ bash run_gpt.sh
 ```
 
 The `run_gpt.sh` script supports various arguments:
+- `input_format`: Type of prompt used for passing conversation logs ("free": as free-text, "json": in distinct JSON format)
 - `level_id`: Prompt level ID [str]
 - `prompt_id`: Prompt system ID [str]
 - `model_id`: Name of model (choices=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o3-mini"]) [str]
@@ -47,7 +48,7 @@ The current `run_gpt.sh` has sample commands for running **1)** Media format (pr
 
 1. Run evaluation on the GPT annotations, using this script:
 ```
-python -u form_checker.py \
+python -u src/scripts/evaluator/form_checker.py \
     --input_dir $INPUT_DIRECTORY \
     --save $SAVE_CSV_FILE;
 ```

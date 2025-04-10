@@ -10,6 +10,7 @@ sys.path.append("./")
 sys.path.append("src/")
 
 
+
 def make_prompt(args):
     PREAMBLE = f"""You are a high-quality annotation assistant. Your task is to annotate conversation logs between users and AI chatbots. You will be given a specific task description, all possible label options for the task, and a part of the conversation, including the user prompt and model response from both previous and current turns. These might be pulled from any part of a multi-turn conversation. As a high-quality annotator you will diligently provide annotations on the current turn that are:
 1. Comprehensive: You will list all relevant annotations as the tasks can be multi-class (only one label is true) or multi-label (multiple categories can be true at once). Pay special attention to subtle, or implied properties of the input conversation. 
@@ -81,7 +82,34 @@ Response: """
     return prompt
 
 
-def format_conversation_turns(conversation):
+def format_conversation_turns_free(conversation):
+    pairs = []
+    for i in range(0, len(conversation) - 1, 2):
+        user_turn = conversation[i]
+        assistant_turn = conversation[i + 1] if i + 1 < len(conversation) else None
+        if user_turn["role"] == "user" or user_turn["role"] == "human" and assistant_turn and assistant_turn["role"] == "assistant" or assistant_turn["role"] == "gpt":
+            pairs.append((user_turn["text"], assistant_turn["text"]))
+
+    formatted_turns = []
+    for i in range(len(pairs)):
+        # Previous turn
+        if i == 0:
+            prev_user = "None"
+            prev_assistant = "None"
+        else:
+            prev_user, prev_assistant = pairs[i - 1]
+
+        # Current turn
+        curr_user, curr_assistant = pairs[i]
+
+        prev_text = f"Previous user prompt: {prev_user}\nPrevious model response: {prev_assistant}"
+        curr_text = f"Current user prompt: {curr_user}\nCurrent model response: {curr_assistant}"
+
+        formatted_turns.append((prev_text, curr_text))
+    return formatted_turns
+
+
+def format_conversation_turns_json(conversation):
     pairs = []
     for i in range(0, len(conversation) - 1, 2):
         user_turn = conversation[i]
@@ -115,12 +143,18 @@ def format_conversation_turns(conversation):
     return formatted_turns
 
 
+
 def extract_samples_and_metadata(args, dataframe, existing_pairs):
     sample, metadata, turn_ids = [], [], []
 
     for _, row in dataframe.iterrows():
         conversation = row["conversation"]
-        formatted_pairs = format_conversation_turns(conversation)
+        if args.input_format.lower() == "json":
+            formatted_pairs = format_conversation_turns_json(conversation)
+        elif args.input_format.lower() == "free":
+            formatted_pairs = format_conversation_turns_free(conversation)
+        else:
+            raise ValueError("input_format needs to be either 'json' or 'free'.")
 
         for i, (prev_text, curr_text) in enumerate(formatted_pairs):
             if (row["ex_id"], i) in existing_pairs:
@@ -177,7 +211,7 @@ async def run_gpt(args, batch_size=1):
                         "level_id": args.level_id,
                         "prompt_id": args.prompt_id,
                         "turn": turn_id,
-                        "input": str(batch[0])
+                        "input": batch[0]
                     }, ensure_ascii=False) + '\n')
                 continue
             else:
@@ -187,7 +221,7 @@ async def run_gpt(args, batch_size=1):
                     "level_id": args.level_id,
                     "prompt_id": args.prompt_id,
                     "turn": turn_id,
-                    "input": str(batch[0]),
+                    "input": batch[0],
                     "response": response
                 }
                 batch_output.append(response_entry)
@@ -196,13 +230,13 @@ async def run_gpt(args, batch_size=1):
                 append_jsonl(batch_output, args.save)
 
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=str, required=True, help="Path to the input json file.")
-    parser.add_argument("--level_id", required=True, default=None)
-    parser.add_argument("--prompt_id", required=True, default=None)
-    parser.add_argument("--model_id", required=True, default=None, choices=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o3-mini"])
+    parser.add_argument("--input_format", type=str, required=True, default=None)
+    parser.add_argument("--level_id", type=str, required=True, default=None)
+    parser.add_argument("--prompt_id", type=str, required=True, default=None)
+    parser.add_argument("--model_id", type=str, required=True, default=None, choices=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o3-mini"])
     parser.add_argument("--save", type=str, required=True, help="Save path.")
     args = parser.parse_args()
 

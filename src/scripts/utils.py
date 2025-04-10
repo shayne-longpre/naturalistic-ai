@@ -1,4 +1,5 @@
 import sys
+import os
 import json
 import pandas as pd
 from helpers import io
@@ -28,6 +29,20 @@ def load_existing_ex_ids(save_fpath):
         return {entry["ex_id"] for entry in existing_data}
     except FileNotFoundError:
         return set()
+
+
+def load_existing_exid_turn_pairs(filepath):
+    if not os.path.exists(filepath):
+        return set()
+    
+    existing_pairs = set()
+    with open(filepath, 'r', encoding='utf-8') as f:
+        for line in f:
+            if line.strip():
+                data = json.loads(line)
+                pair = (data.get('ex_id'), data.get('turn'))
+                existing_pairs.add(pair)
+    return existing_pairs
 
 
 def valid_turn(text):
