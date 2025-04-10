@@ -1,5 +1,3 @@
-#!/bin/bash
-
 python -u src/scripts/run_gpt.py \
     --level_id prompt \
     --prompt_id media_format \
