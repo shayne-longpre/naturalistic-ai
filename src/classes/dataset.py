@@ -75,6 +75,16 @@ class Dataset(object):
         else:
             return [m.to_dict() for cc in self.data for m in cc.conversation if f"{cc.conversation_id}-{m.turn}" in ids]
 
+    # def apply_filter(
+    #     self, 
+    #     filter_fn,
+    #     level: str = "conversation",
+    # ):
+    #     if level == "conversation":
+    #         self.data = [conv for conv in self.data if filter_fn(conv)]
+    #     else: # level == "message"
+    #         self.data = [conv for conv in self.data if filter_fn(conv)]
+
     def add_annotations(
         self,
         annotation_set: AnnotationSet,
@@ -259,54 +269,41 @@ class Dataset(object):
             combination_pairs, annotation_pairs = [], []
             total_items, value_exists1, value_exists2 = 0, 0, 0
 
+            def _extract_annotation_pair(obj, obj_id):
+                val1 = obj._get_attr(source1, name1)
+                val2 = obj._get_attr(source2, name2)
+                value_exists1 += 1 if val1 is not None else 0
+                value_exists2 += 1 if val2 is not None else 0
+                
+                annotation_pair = None
+                if val1 is not None and val2 is not None:
+                    # Add all pairwise combinations for list values
+                    combination_pair = _create_pairwise_combinations(
+                        obj_id, val1, val2
+                    )
+                    annotation_pair = (
+                        obj_id, 
+                        sorted(val1) if isinstance(val1, list) else val1, 
+                        sorted(val2) if isinstance(val2, list) else val2,
+                    )
+                return annotation_pair, combination_pair, int(val1 is not None), (val2 is not None)
+
             if level == "conversation":
                 for conv in self.data:
-                    total_items += 1
-                    
-                    # Handle built-in attributes
-                    if source1 in [None, "conversation"]:
-                        val1 = getattr(conv, name1)
-                    else:
-                        val1 = conv.metadata.get(full_name1).value if full_name1 in conv.metadata else None
-                        
-                    if source2 in [None, "conversation"]:
-                        val2 = getattr(conv, name2)
-                    else:
-                        val2 = conv.metadata.get(full_name2).value if full_name2 in conv.metadata else None
-
-                    value_exists1 += 1 if val1 is not None else 0
-                    value_exists2 += 1 if val2 is not None else 0
-                    
-                    if val1 is not None and val2 is not None:
-                        # Add all pairwise combinations for list values
-                        combination_pairs.extend(_create_pairwise_combinations(
-                            conv.conversation_id, val1, val2
-                        ))
-                        annotation_pairs.append((
-                            conv.conversation_id, 
-                            sorted(val1) if isinstance(val1, list) else val1, 
-                            sorted(val2) if isinstance(val2, list) else val2,
-                        ))
-            
+                    annotation_pair, combination_pair, exists1, exists2 = _extract_annotation_pair(conv, conv.conversation_id)
             else:  # level == "message"
                 for conv in self.data:
                     for msg in conv.conversation:
-                        total_items += 1
-                        
-                        val1 = msg.metadata.get(full_name1).value if full_name1 in msg.metadata else None
-                        val2 = msg.metadata.get(full_name2).value if full_name2 in msg.metadata else None
-                        value_exists1 += 1 if val1 is not None else 0
-                        value_exists2 += 1 if val2 is not None else 0
-                        
-                        if val1 is not None and val2 is not None:
-                            combination_pairs.extend(
-                                _create_pairwise_combinations(f"{conv.conversation_id}-{msg.turn}", val1, val2))
-                            annotation_pairs.append((
-                                f"{conv.conversation_id}-{msg.turn}", 
-                                sorted(val1) if isinstance(val1, list) else val1,
-                                sorted(val2) if isinstance(val2, list) else val2,
-                            ))
-            
+                        annotation_pair, combination_pair, exists1, exists2 = _extract_annotation_pair(msg, f"{conv.conversation_id}-{msg.turn}")
+
+            if annotation_pair:
+                annotation_pairs.append(annotation_pair)
+            if combination_pair:
+                combination_pairs.extend(combination_pair)
+            total_items += 1
+            value_exists1 += exists1
+            value_exists2 += exists2
+
             if verbose:
                 print(f"Found {value_exists1} items with `{source1}-{name1}`, and {value_exists2} with `{source2}-{name2}`.")
                 print(f"Generated {len(annotation_pairs)} label-level pairs (at level={level}) out of {total_items} total items.")

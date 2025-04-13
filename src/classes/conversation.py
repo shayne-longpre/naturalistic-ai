@@ -62,3 +62,15 @@ class Conversation(object):
         }
         obj["conversation"] = [m.to_dict() for m in self.conversation]
         return obj
+        
+    def get_attr(
+        self,
+        source,
+        attribute_name,
+    ):
+        # Handle built-in attributes
+        if source in [None, "conversation"]:
+            return getattr(self, attribute_name)
+        else:
+            metadata_key = f"{source}-{attribute_name}"
+            return self.metadata.get(metadata_key).value if metadata_key in self.metadata else None
