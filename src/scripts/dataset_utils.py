@@ -3,10 +3,11 @@ from typing import List
 from torch.utils.data import DataLoader
 import pandas as pd 
 import os 
-import io
+from helpers import io
 import jsonlines
 import json
 import warnings
+from ast import literal_eval
 
 """
 This dataset_utils.py file is used to define the Dataset and Conversation objects, and corresponding functions. 
@@ -20,10 +21,25 @@ To load a dataset for use, use the load_datasets.py file.
 def process_csv_into_conversations(path):
     conversations = []
     data = pd.read_csv(path)
+    
+    # Parse "Turn" columns as dictionaries (specific to CSVs because of the way pandas handles " and '. )
+    turn_columns = [col for col in data.columns if "Turn" in col]
+    for col in turn_columns:
+        data[col] = data[col].apply(lambda x: literal_eval(x) if pd.notna(x) else None) 
+    
     for _, row in data.iterrows():
-        conv_unpacked = [
-            {"text": row[f"Turn {i}"]} for i in range(6) if pd.notna(row[f"Turn {i}"])
-        ]
+
+        conv_unpacked = []
+  
+        for i in range(len([x for x in data.columns if "Turn" in x])):
+            print(row[f"Turn {i}"])
+            if pd.notna(row[f"Turn {i}"]):
+                #print(row[f"Turn {i}"].replace("'", '"'), flush = True)
+                text = row[f"Turn {i}"]["text"]
+                image = row[f"Turn {i}"]["image"]
+                turn_as_dict = {"text": text, "image": image}
+                conv_unpacked.append(turn_as_dict)
+     
         conv_obj = Conversation(
             ex_id=row["ex_id"],
             dataset_id=row["dataset_id"],
@@ -43,8 +59,9 @@ def process_jsonl_into_conversations(path):
   
     with jsonlines.open(path) as reader:
         for item in reader:
+            
             conversation = [
-                {"text": turn["text"]} for turn in item["conversation"]
+                {"text": turn["text"], "image": turn["image"]} for turn in item["conversation"]
             ]
             
             conv_obj = Conversation(
@@ -68,7 +85,7 @@ def process_json_into_conversations(path):
         data = json.load(file)
         for item in data:
             conversation = [
-                {"text": turn["text"]} for turn in item["conversation"]
+                {"text": turn["text"], "image": turn["image"]} for turn in item["conversation"]
             ]
             
             conv_obj = Conversation(
@@ -89,7 +106,10 @@ def process_json_into_conversations(path):
 ###################### Conversation and Dataset Objects ###################### 
 
 class Conversation(object):
-    """A conversation object, with all metadata."""
+    """A conversation object, with all metadata. Conversations are structured as a list of turns, where each turn is a dictionary with the following keys:
+        - text (str): The text of the turn
+        - image: The image submitted (if any)
+    """
 
     def __init__(
         self,
@@ -111,7 +131,14 @@ class Conversation(object):
         self.geography = geography
         self.languages = languages
 
-    def to_dict(self, unpack_conversation=False):
+    def to_dict(self, unpack_conversation=False, convert_image_to_PIL = False, convert_image_to_np = False):
+        """
+        This function converts the conversation object to a dictionary.
+        If unpack_conversation is set to True, the conversation is unpacked into a list of dictionaries, where each dictionary contains the text and image of the turn.
+        While unpacking a conversation, you have the option to convert any images into a printable format (PIL obect or numpy array) the following flags: 
+            -- convert_image_to_PIL is set to True, the image is converted to a PIL image. Only valid if unpacking the conversation.
+            -- convert_image_to_np is set to True, the image is converted to a numpy array. Only valid if unpacking the conversation.
+        """
         obj = {
             "ex_id": self.ex_id,
             "dataset_id": self.dataset_id,
@@ -121,9 +148,24 @@ class Conversation(object):
             "geography": self.geography,
             "languages": self.languages,
         }
+        if convert_image_to_PIL:
+            image_transform = io.convert_base64_to_PIL_image
+        elif convert_image_to_np:
+            image_transform = io.convert_base64_to_np_array
+        else: 
+            image_transform = lambda x: x
+        
         if unpack_conversation:
-            for i in range(6):
-                obj[f"Turn {i}"] = self.conversation[i]["text"] if i < len(self.conversation) else ""
+            for i in range(len(self.conversation)):
+                if "text" in self.conversation[i]:
+                    turn_text = self.conversation[i]["text"]
+                else: 
+                    turn_text = ""
+                if "image" in self.conversation[i]:
+                    turn_image = image_transform(self.conversation[i]["image"])
+                else:
+                    turn_image = None
+                obj[f"Turn {i}"] = {"text": turn_text, "image": turn_image}
         else:
             obj["conversation"] = self.conversation
         return obj
@@ -140,7 +182,7 @@ class Dataset():
         self.dataset_id:str = dataset_id
         self.data:List[Conversation] = data
         if len(data) ==0: 
-            raise ValueError("No Data Provided to the Dataset class.")
+            warnings.warn("No Data Provided to the Dataset class. Please load data using the load_data_from_file() function.")
         if len(self.data) > 0:
             self.features = list(data[0].to_dict().keys())
         else: 
@@ -295,7 +337,8 @@ class Dataset():
             save_path_overwrite: By default, Datasets are saved in {dataset_folder}/{dataset_name}/<actual data files> for consistency. To define a specific save path instead, provide the full path here
              
         """
-        if len(self.data)>0:
+
+        if len(self.data)<1:
             warnings.warn("Cannot write data to file, as no data has been loaded. Load data by calling load_data_from_file().")
             return 
         
@@ -310,8 +353,10 @@ class Dataset():
         if save_path.endswith(".jsonl"):
             dset = [x.to_dict() for x in self.data]
             io.write_jsonl(dset, save_path)
+        
         elif save_path.endswith(".csv"):
-            dset_df = pd.DataFrame([x.to_dict(unpack_conversation=True) for x in dset])
+            
+            dset_df = pd.DataFrame([x.to_dict(unpack_conversation=True) for x in self.data])
             dset_df.to_csv(save_path, index=False)
         else:
             raise ValueError(f"Don't recognize this save path extension for the constructed save_path: {save_path}")

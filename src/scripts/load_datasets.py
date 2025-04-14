@@ -20,7 +20,10 @@ DATASET_LOCATIONS = {
     ### Benchmarks ###
     "chatbot_arena": "dataset_downloads/chatbot_arena",
     "alpaca_eval": "dataset_downloads/alpaca_eval",
-    "mmlu": "dataset_downloads/mmlu"
+    "mmlu": "dataset_downloads/mmlu",
+    "hle": "dataset_downloads/hle",
+    "gpqa": "dataset_downloads/gpqa",
+    "swebench": "dataset_downloads/swebench",
 }
 DATASET_CATEGORIES = {
     ### User Datasets ###
@@ -31,7 +34,11 @@ DATASET_CATEGORIES = {
     ### Benchmarks ###
     "chatbot_arena": "benchmark",
     "alpaca_eval": "benchmark",
-    "mmlu": "benchmark"
+    "mmlu": "benchmark", 
+    "hle": "benchmark",
+    "gpqa": "benchmark",
+    "swebench": "benchmark",
+    
 }
 DATASET_SIZES = {
     ### User Datasets ###
@@ -42,7 +49,10 @@ DATASET_SIZES = {
     ### Benchmarks ###
     "chatbot_arena": 66000,
     "alpaca_eval":  805,
-    "mmlu": 14042
+    "mmlu": 14042, 
+    "hle": 2700,
+    "gpqa": 546,
+    "swebench": 2294,
 }
 
 def filter_by_id(ids: list[str]):
