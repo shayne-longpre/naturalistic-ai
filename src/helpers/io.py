@@ -13,6 +13,10 @@ import pandas as pd
 import typing
 from collections import defaultdict
 # from semanticscholar import SemanticScholar
+import base64
+from PIL import Image
+from io import BytesIO
+import numpy as np
 
 import requests
 from datasets import Dataset, load_dataset
@@ -20,7 +24,37 @@ from datasets import Dataset, load_dataset
 # import src.helpers.constants as constants
 # from . import constants
 
+#############################################################################
+############### Image Reading and Conversion
+#############################################################################
 
+def convert_base64_to_PIL_image(base64_string):
+    
+    # Remove the metadata part of the Base64 string
+    base64_string = base64_string.split(",")[1]
+
+    # Decode the Base64 string
+    image_data = base64.b64decode(base64_string)
+
+    # Make a PIL Image 
+    image = Image.open(BytesIO(image_data))
+    return image
+
+def convert_base64_to_np_array(base64_string):
+    
+    # Remove the metadata part of the Base64 string
+    base64_string = base64_string.split(",")[1]
+
+    # Decode the Base64 string
+    image_data = base64.b64decode(base64_string)
+
+    # Convert the image data to a PIL Image
+    image = Image.open(BytesIO(image_data))
+
+    # Convert the PIL Image to a numpy array
+    np_array = np.array(image)
+
+    return np_array
 
 #############################################################################
 ############### Local File IO

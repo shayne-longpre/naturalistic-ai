@@ -9,6 +9,7 @@ sys.path.append("./")
 
 from src.classes.annotation_record import AnnotationRecord
 from src.helpers import io
+from src.classes import automatic_annotation_parser
 
 
 
@@ -76,9 +77,32 @@ class AnnotationSet(object):
         )
 
     @classmethod
-    def load_automatic(cls, path: str):
+    def load_automatic(
+        cls, 
+        path: str,
+        source: str,
+        dataset_id_override: str=None,
+    ):
         """Alternative constructor that initializes from automatic annotation file(s)."""
-        pass
+        annotations = automatic_annotation_parser.parse_automatic_annotations(path, verbose=True)
+
+        level_id = annotations[0]["level_id"]
+        prompt_id = annotations[0]["prompt_id"]
+        dataset_id = dataset_id_override or annotations[0]["dataset_id"] 
+
+        return cls(
+            source=source, 
+            name=prompt_id, 
+            level="conversation" if level_id == "conversation" else "message",
+            dataset_id=dataset_id,
+            annotations=[
+                AnnotationRecord(
+                    value=x["parsed_response"], 
+                    target_id=x["ex_id"] + "-" + str(x["turn"]),
+                    annotator=x.get("model"),
+                ) 
+                for x in annotations],
+        )
 
     def to_dict(self):
         return {
@@ -102,9 +126,13 @@ class AnnotationSet(object):
             remapped_annotations.append(AnnotationRecord(value=new_value, target_id=x.target_id))
         self.annotations = remapped_annotations
 
+
         
 
-def process_annotations_to_annotation_sets(annotations_list, source: str):
+def process_annotations_to_annotation_sets(
+    annotations_list, 
+    source: str,
+):
     task_groups = {}
     
     for annotation in annotations_list:
@@ -131,7 +159,7 @@ def process_annotations_to_annotation_sets(annotations_list, source: str):
             source=source,
             name=task_name,
             level="message",
-            dataset_id="sample120",
+            dataset_id="sample120", # TODO: Fix.
             annotations=[
                 AnnotationRecord(
                     value=x["annotation_value"],

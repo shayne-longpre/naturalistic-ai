@@ -33,7 +33,8 @@ def download_lmsys_1m():
             {
                 "role": msg.get("role"),
                 "turn": idx,
-                "content": msg.get("content", "")
+                "content": msg.get("content", ""),
+                "image": "",
             }
             for idx, msg in enumerate(datum.get("conversation", []))
         ]
@@ -66,7 +67,8 @@ def download_wildchat_v1():
             {
                 "role": msg.get("role"),
                 "turn": idx,
-                "content": msg.get("content", "")
+                "content": msg.get("content", ""),
+                "image": "",
             }
             for idx, msg in enumerate(datum.get("conversation", []))
         ]
@@ -114,7 +116,8 @@ def download_sharegpt_v1():
             conversation.append({
                 "role": msg.get("from"),
                 "turn": idx,
-                "content": msg.get("value", "")
+                "content": msg.get("value", ""),
+                "image": msg.get("image", ""),
             })
 
         return Conversation(
@@ -136,13 +139,14 @@ def download_chatbot_arena():
     dset = io.huggingface_download("lmsys/chatbot_arena_conversations", split="train")
 
     def add_turn_and_rename_keys(conv:list[object]):
-        turn_count = 1
         conv_with_turn = []
-        for statement in conv:
-            statement["turn"] = turn_count
-            statement["content"] = statement.pop("content")
-            turn_count = turn_count+1
-            conv_with_turn.append(statement)
+        for idx, statement in enumerate(conv):
+            new_statement = {
+                "turn": idx,
+                "content": statement.get("content"),
+                "image": statement.get("image"),
+            }
+            conv_with_turn.append(new_statement)
         return conv_with_turn
 
     def process_data(datum):
@@ -196,15 +200,20 @@ def download_alpaca_eval():
     dset = load_dataset("tatsu-lab/alpaca_eval", split = "eval", trust_remote_code=True, token = True) #TODO integrate this with io helpers
 
     def process_data(datum):
-        conv = [{
+        conv = [
+            {
                 "role": "user",
-                "turn": 1, 
-                "content": datum.get("instruction")
-                }, {
+                "turn": 0, 
+                "content": datum.get("instruction"),
+                "image": "",
+            }, 
+            {
                 "role": "assistant",
-                "turn": 1, 
-                "content": datum.get("output")
-                }]
+                "turn": 0, 
+                "content": datum.get("output"),
+                "image": "",
+            }
+        ]
 
         
         return Conversation(
@@ -230,13 +239,14 @@ def download_mmlu():
     choice_indiciators = ["a)", "b)", "c)", "d)", "e)", "f)", "g)", "h)", "i)", "j)", "k)", "l)", "m)", "n)", "o)", "p)", "q)", "r)", "s)", "t)", "u)", "v)", "w)", "x)", "y)", "z)"]
 
     def process_data(datum):
-            conv = [{
+            conv = [
+                {
                     "role": "user",
-                    "turn": 1, 
-                    "content": datum.get("question") + " " + " ".join(f"{choice_indiciators[i]} {datum.get("choices")[i]}" for i in range(len(datum.get("choices"))))
-                    }
-                    ]
-            # print(conv)
+                    "turn": 0, 
+                    "content": datum.get("question") + " " + " ".join(f"{choice_indiciators[i]} {datum.get("choices")[i]}" for i in range(len(datum.get("choices")))),
+                    "image": "",
+                }
+            ]
 
             return Conversation(
                 conversation_id="mmlu_" + str(uuid.uuid4()),
@@ -257,14 +267,114 @@ def download_mmlu():
     
     return conversations_to_return
 
+# Download HLE
+def download_hle():
+    print("Starting Download for HLE (Humanity's Last Exam)...")
+    dset = io.huggingface_download('cais/hle', split='test')
 
+    def process_data(datum):
+        conv = [
+            {
+                "role": "user",
+                "turn": 0, 
+                "content": datum.get("question"),
+                "image": datum.get("image") if datum.get("image") else ''
+            }
+        ]
+        
+        return Conversation(
+            ex_id="hle_" + datum.get('id'),
+            dataset_id="hle",
+            user_id=str(datum.get('author_name')),
+            time="02/11/2025", # huggingface release date
+            model=None,
+            conversation=conv,
+            geography="Unknown",
+            languages="English"
+        )
+    
+    
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing Humanity's Last Exam")]
+
+# Download GPQA
+def download_gpqa():
+    print("Starting Download for GPQA...")
+    dset = io.huggingface_download('Idavidrein/gpqa', 'gpqa_extended', split="train")
+
+    def process_data(datum):
+        choice_strings = ["Correct Answer", "Incorrect Answer 1", "Incorrect Answer 2", "Incorrect Answer 3"]
+        random.shuffle(choice_strings)
+
+        choices = [
+            f"a) {datum.get(choice_strings[0])}",
+            f"b) {datum.get(choice_strings[1])}",
+            f"c) {datum.get(choice_strings[2])}",
+            f"d) {datum.get(choice_strings[3])}"
+        ]
+        
+        conv = [
+            {
+                "role": "user",
+                "turn": 0, 
+                "content": f"{datum.get('Question')}\nChoices:\n" + "\n".join(choices),
+                "image": '',
+            }
+        ]
+        
+
+        return Conversation(
+            ex_id="gpqa_" + datum.get('Record ID'),
+            dataset_id="gpqa",
+            user_id=str(datum.get('Question Writer')),
+            time="11/29/2023",
+            model=None,
+            conversation=conv,
+            geography="Unknown",
+            languages="English"
+        )
+    
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing GPQA")]
+
+
+# Download SWE-Bench
+def download_swebench():
+    print("Starting Download for SWE Bench...")
+    dset = io.huggingface_download('princeton-nlp/SWE-bench', split="test")
+
+    def process_data(datum):
+        
+        conv = [
+            {
+                "role": "user",
+                "turn": 0, 
+                "content": f"Problem Statement: {datum.get('problem_statement')} \nRepo: {datum.get('repo')} \nBase_commit: {datum.get('base_commit')} \n",
+                "image": '',
+            }
+        ]
+        
+
+        return Conversation(
+            ex_id="swebench_" + datum.get('instance_id'),
+            dataset_id="swebench",
+            user_id=str(datum.get('repo')), # Is the repo a good indicator of user_id?
+            time=datum.get('created_at').isoformat() if isinstance(datum.get('timestamp'), datetime) else None,
+            model=None,
+            conversation=conv,
+            geography="Unknown",
+            languages="Unknown"
+        )
+    
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing GPQA")]
 DOWNLOAD_FUNCTIONS = {
     "wildchat_v1": download_wildchat_v1,
     "lmsys_1m": download_lmsys_1m,
     "sharegpt_v1": download_sharegpt_v1,
     "chatbot_arena": download_chatbot_arena,
     "alpaca_eval": download_alpaca_eval,
-    "mmlu": download_mmlu
+    "mmlu": download_mmlu,
+    "hle": download_hle, 
+    "gpqa": download_gpqa, 
+    "swebench": download_swebench
 }
 
 

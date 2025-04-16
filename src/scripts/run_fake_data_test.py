@@ -6,11 +6,12 @@ from typing import List, Dict, Any, Set
 
 sys.path.append("./")
 
-from src.helpers.io import read_jsonl, write_json
+from src.helpers.io import read_jsonl, write_json, listdir_nohidden
 from src.classes.dataset import Dataset
 from src.classes.label_studio import load_labelstudio, split_labelstudio_files_by_conversation_id
-from src.classes.annotation_set import AnnotationSet, parse_labelstudio_files, process_annotations_to_annotation_sets
-from src.helpers.visualisation import tabulate_interrater_metrics, barplot_distribution, plot_confusion_matrix
+from src.classes.annotation_set import AnnotationSet
+from src.helpers.visualisation import tabulate_annotation_pair_summary, barplot_distribution, plot_confusion_matrix
+
 
 
 
@@ -110,33 +111,57 @@ def add_conversation_ids_to_label_studio_files(
     print(f"Added conversation IDs to {file_count} files")
 
 
+def run_automatic_analysis_v0(dirpath):
 
-def run_test_cedric():
-    dataset = Dataset.load('data/sample120.json')
+    dataset = run_test_cedric(dirpath)
+    # # Load dataset
+    # dataset = Dataset.load('data/sample120.json')
+
+    automatic_variants = [
+        "gpt4o-json-full",
+        "gpt4o-free-full",
+        "gpto3mini-json-full",
+        "gpto3mini-free-full",
+    ]
+
+    # Load automatic annotations
+    for variant in automatic_variants:
+        print("\n" + variant + "\n")
+        for fpath in listdir_nohidden(os.path.join(dirpath, f"automatic_annotations_v0/{variant}")):
+            if "prompt_topic" in fpath:
+                continue
+            annotation_set = AnnotationSet.load_automatic(path=fpath, source=variant.replace("-", "_"), dataset_id_override="sample120")
+            dataset.add_annotations(annotation_set)
+
+    return dataset
+
+
+def run_test_cedric(dirpath):
+    dataset = Dataset.load(os.path.join(dirpath, "sample120.json")) 
 
     # TODO: This adds conversation IDs to LabelStudio data and saves it to `data/labelstudio_outputs_wcids/`
     # Remove this when we have them in the LS outputs by default.
     add_conversation_ids_to_label_studio_files(
-        "data/labelstudio_outputs/",
-        'data/sample120.json',
-        "data/labelstudio_outputs_wcids/",
+        os.path.join(dirpath, "labelstudio_outputs/"),
+        os.path.join(dirpath, 'sample120.json'),
+        os.path.join(dirpath, "labelstudio_outputs_wcids/"),
     )
 
     # split annotations into two folders without any duplicate conversation IDs in each file.
     split_labelstudio_files_by_conversation_id(
-        input_folder="data/labelstudio_outputs_wcids/",
-        output_folder1="data/labelstudio_outputs_split1/",
-        output_folder2="data/labelstudio_outputs_split2/"
+        input_folder=os.path.join(dirpath, "labelstudio_outputs_wcids/"),
+        output_folder1=os.path.join(dirpath, "labelstudio_outputs_split1/"),
+        output_folder2=os.path.join(dirpath, "labelstudio_outputs_split2/"),
     )
 
     annotation_sets1 = load_labelstudio(
-        "data/labelstudio_outputs_split1", 
+        os.path.join(dirpath, "labelstudio_outputs_split1"), 
         source="split1",
         dataset_id="sample120",
         level="message",
     )
-    annotation_sets2 = process_annotations_to_annotation_sets(
-        "data/labelstudio_outputs_split2", 
+    annotation_sets2 = load_labelstudio(
+        os.path.join(dirpath, "labelstudio_outputs_split2"), 
         source="split2",
         dataset_id="sample120",
         level="message",
@@ -238,7 +263,7 @@ def run_test():
             break
     
     # Print agreement metrics
-    tabulate_interrater_metrics(agreement_metrics)
+    tabulate_annotation_pair_summary(agreement_metrics)
     
     # Plot distributions
     print("\nPlotting distributions... (Not shown in console output)")

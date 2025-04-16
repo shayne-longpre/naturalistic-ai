@@ -3,9 +3,9 @@ import openai
 import json
 import asyncio
 import aiohttp
-import requests
 import tiktoken
 from dotenv import load_dotenv
+
 
 class GPT(object):
     """
@@ -113,8 +113,15 @@ class GPT(object):
             json.dump(self.cache, file, indent=4, ensure_ascii=False)
 
     def count_tokens(self, text):
-        encoding = tiktoken.encoding_for_model(self.model)
-        return len(encoding.encode(text))
+        # https://github.com/openai/tiktoken/blob/main/tiktoken/model.py#L87
+        try:
+            encoding = tiktoken.encoding_for_model(self.model)
+        except:
+            print(f"[Warning] No tokenizer found for model '{self.model}', using 'o200k_base' as fallback.")
+            encoding = tiktoken.get_encoding("o200k_base")
+        token_count = len(encoding.encode(text))
+        return token_count
+    
 
     def make_openai_request(self, final_prompt):
         """
@@ -231,22 +238,39 @@ class GPT(object):
     
     def estimate_cost(self):
         """
-        Calculates estimated cost based on OpenAI pricing.
+        Determines which cost estimation to use based on the model and prints cumulative usage.
         """
+        model = self.model.lower()
+        if 'gpt-4o' in model:
+            self._estimate_cost_4o()
+        elif 'gpt-3.5' in model or 'o3-mini' in model:
+            self._estimate_cost_o3()
+        else:
+            print(f"No cost estimator defined for model: {self.model}")
+    
+    def _estimate_cost_4o(self):
         input_cost = (self.token_usage["input_tokens"] / 1_000_000) * 2.50
         cached_input_cost = (self.token_usage["cached_input_tokens"] / 1_000_000) * 1.25
         output_cost = (self.token_usage["output_tokens"] / 1_000_000) * 10.00
         total_cost = input_cost + cached_input_cost + output_cost
 
-        print("\n-----------Token Usage Summary-----------")
-        print(f"  Input Tokens: {self.token_usage['input_tokens']}")
-        print(f"  Cached Input Tokens: {self.token_usage['cached_input_tokens']}")
-        print(f"  Output Tokens: {self.token_usage['output_tokens']}")
-        print("\n-----------Estimated Cost-----------")
+        print("\n-----------Estimated Cost (gpt-4o)-----------")
         print(f"  Input Cost: ${input_cost:.4f}")
         print(f"  Cached Input Cost: ${cached_input_cost:.4f}")
         print(f"  Output Cost: ${output_cost:.4f}")
-        print(f"  Total Cost: ${total_cost:.4f}")
+        print(f"  Total Cost: ${total_cost:.4f}\n")
+
+    def _estimate_cost_o3(self):
+        input_cost = (self.token_usage["input_tokens"] / 1_000_000) * 1.10
+        cached_input_cost = (self.token_usage["cached_input_tokens"] / 1_000_000) * 0.55
+        output_cost = (self.token_usage["output_tokens"] / 1_000_000) * 4.40
+        total_cost = input_cost + cached_input_cost + output_cost
+
+        print("\n-----------Estimated Cost (gpt-o3-mini)-----------")
+        print(f"  Input Cost: ${input_cost:.4f}")
+        print(f"  Cached Input Cost: ${cached_input_cost:.4f}")
+        print(f"  Output Cost: ${output_cost:.4f}")
+        print(f"  Total Cost: ${total_cost:.4f}\n")
 
 
     async def process_prompts_in_batches_async(
@@ -293,24 +317,9 @@ class GPT(object):
                 # for item, parsed_response in zip(batch_prompts, parsed_responses):
                 #     response_with_metadata = {"input": item, "response": parsed_response}
                 #     final_responses.append(response_with_metadata)
-        
         self.estimate_cost()
         return parsed_responses
 
-
-    def get_token_count(self, msg):
-        """
-        Calculate and print the number of tokens in a given message using the model-specific encoding.
-
-        Parameters:
-        - msg (str): The text message to encode and count tokens.
-
-        Returns:
-        - None: Outputs the token count directly to the console.
-        """
-        encoding = tiktoken.encoding_for_model(self.model)
-        token_count = len(encoding.encode(msg))
-        print(f"The text contains {token_count} tokens.")
 
     def clear_cache(self):
         """

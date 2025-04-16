@@ -88,6 +88,7 @@ class Dataset(object):
     def add_annotations(
         self,
         annotation_set: AnnotationSet,
+        verbose: bool=False,
     ):
         """Update the dataset `metadata` fields in conversation or messages directly.
         This is used to maintain any type of metadata alongside the dataset.
@@ -100,11 +101,13 @@ class Dataset(object):
         assert set(annotation_conv_ids) <= set(dset_conv_ids)
         src, name, lvl = annotation_set.source, annotation_set.name, annotation_set.level
         if lvl == "conversation":
-            print(f"Adding AnnotationSet '{src}' for label=`{name}` ({lvl}-level): {len(set(annotation_conv_ids))} of {len(set(dset_conv_ids))} dataset conversations.")
+            if verbose:
+                print(f"Adding AnnotationSet '{src}' for label=`{name}` ({lvl}-level): {len(set(annotation_conv_ids))} of {len(set(dset_conv_ids))} dataset conversations.")
         else:
             dset_num_messages = sum([len(cc.conversation) for cc in self.data])
             annotated_messages = len(annotation_conv_ids)
-            print(f"Adding AnnotationSet '{src}' for label=`{name}` ({lvl}-level): {annotated_messages} of {dset_num_messages} dataset messages, or {len(set(annotation_conv_ids))} of {len(set(dset_conv_ids))} dataset conversations.")
+            if verbose:
+                print(f"Adding AnnotationSet '{src}' for label=`{name}` ({lvl}-level): {annotated_messages} of {dset_num_messages} dataset messages, or {len(set(annotation_conv_ids))} of {len(set(dset_conv_ids))} dataset conversations.")
 
         conv_id_to_idx = {x.conversation_id: i for i, x in enumerate(self.data)}
         # add to conversations
@@ -270,39 +273,47 @@ class Dataset(object):
             total_items, value_exists1, value_exists2 = 0, 0, 0
 
             def _extract_annotation_pair(obj, obj_id):
-                val1 = obj._get_attr(source1, name1)
-                val2 = obj._get_attr(source2, name2)
-                value_exists1 += 1 if val1 is not None else 0
-                value_exists2 += 1 if val2 is not None else 0
+                val1 = obj.get_attr(source1, name1)
+                val2 = obj.get_attr(source2, name2)
                 
-                annotation_pair = None
+                local_combination_pair, local_annotation_pair = None, None
                 if val1 is not None and val2 is not None:
                     # Add all pairwise combinations for list values
-                    combination_pair = _create_pairwise_combinations(
+                    local_combination_pair = _create_pairwise_combinations(
                         obj_id, val1, val2
                     )
-                    annotation_pair = (
+                    local_annotation_pair = (
                         obj_id, 
                         sorted(val1) if isinstance(val1, list) else val1, 
                         sorted(val2) if isinstance(val2, list) else val2,
                     )
-                return annotation_pair, combination_pair, int(val1 is not None), (val2 is not None)
+
+                return local_annotation_pair, local_combination_pair, int(val1 is not None), (val2 is not None)
 
             if level == "conversation":
                 for conv in self.data:
                     annotation_pair, combination_pair, exists1, exists2 = _extract_annotation_pair(conv, conv.conversation_id)
+
+                    if annotation_pair:
+                        annotation_pairs.append(annotation_pair)
+                    if combination_pair:
+                        combination_pairs.extend(combination_pair)
+                    total_items += 1
+                    value_exists1 += exists1
+                    value_exists2 += exists2
+
             else:  # level == "message"
                 for conv in self.data:
                     for msg in conv.conversation:
                         annotation_pair, combination_pair, exists1, exists2 = _extract_annotation_pair(msg, f"{conv.conversation_id}-{msg.turn}")
 
-            if annotation_pair:
-                annotation_pairs.append(annotation_pair)
-            if combination_pair:
-                combination_pairs.extend(combination_pair)
-            total_items += 1
-            value_exists1 += exists1
-            value_exists2 += exists2
+                        if annotation_pair:
+                            annotation_pairs.append(annotation_pair)
+                        if combination_pair:
+                            combination_pairs.extend(combination_pair)
+                        total_items += 1
+                        value_exists1 += exists1
+                        value_exists2 += exists2
 
             if verbose:
                 print(f"Found {value_exists1} items with `{source1}-{name1}`, and {value_exists2} with `{source2}-{name2}`.")

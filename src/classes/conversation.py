@@ -58,7 +58,7 @@ class Conversation(object):
             "time": self.time,
             "model": self.model,
             "geography": self.geography,
-            "metadata": {k: v.to_dict() for k, v self.metadata.items()}
+            "metadata": {k: v.to_dict() for k, v in self.metadata.items()},
         }
         obj["conversation"] = [m.to_dict() for m in self.conversation]
         return obj
