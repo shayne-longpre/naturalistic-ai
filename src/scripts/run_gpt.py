@@ -2,7 +2,7 @@ import sys
 import asyncio
 import argparse
 import pandas as pd
-from helpers import gpt
+from helpers import gpt, io
 from utils import *
 
 # Preliminaries
@@ -10,8 +10,8 @@ sys.path.append("./")
 
 
 def make_prompt(args):
-    TASK_DESCRIPTION = read_json("src/scripts/instructions.json")
-    OPTIONS = read_json("src/scripts/taxonomy_options.json")
+    TASK_DESCRIPTION = io.read_json("src/scripts/instructions.json")
+    OPTIONS = io.read_json("src/scripts/taxonomy_options.json")
 
     PREAMBLE = f"""You are a high-quality annotation assistant. Your task is to annotate conversation logs between users and AI chatbots. You will be given a specific task description, all possible label options for the task, and a part of the conversation, including the user prompt and model response from both previous and current turns. These might be pulled from any part of a multi-turn conversation. As a high-quality annotator you will diligently provide annotations on the current turn that are:
 1. Comprehensive: You will list all relevant annotations as the tasks can be multi-class (only one label is true) or multi-label (multiple categories can be true at once). Pay special attention to subtle, or implied properties of the input conversation. 

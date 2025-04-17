@@ -2,15 +2,13 @@ import json
 import re
 import os
 import csv
+import sys
 import math
 import argparse
+from helpers import io
 from collections import Counter
 
-
-def read_options(json_file):
-    with open(json_file, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    return data
+sys.path.append("./")
 
 
 def extract_options(taxonomy_options, level_key, prompt_key):
@@ -167,7 +165,7 @@ if __name__ == "__main__":
         print("No .jsonl files found in the input directory.")
         exit()
 
-    taxonomy_options = read_options("../taxonomy_options.json")
+    taxonomy_options = io.read_json("src/scripts/taxonomy_options.json")
 
     all_results = []
 
