@@ -1,17 +1,12 @@
-import os
 import sys
-import typing
 import json
 import re
-import math
 import copy
-from collections import defaultdict, Counter
+from collections import defaultdict
 from typing import List, Dict, Tuple, Any, Optional
+from src.helpers import io
 
 sys.path.append("./")
-
-from src.helpers import io
-from src.scripts.evaluator.taxonomy import OPTIONS
 
 
 # Helper Functions
@@ -38,7 +33,7 @@ def extract_json(response_str: str) -> Optional[List[Dict[str, Any]]]:
         return None
 
 
-def label_in_options(label: str, options: List[str]) -> bool:
+def label_in_options_exact(label: str, options: List[str]) -> bool:
     """Check if a label is valid based on provided options."""
     def normalize_label(label: str) -> str:
         """Normalize labels by removing extra spaces and hyphens."""
@@ -46,6 +41,18 @@ def label_in_options(label: str, options: List[str]) -> bool:
 
     norm_label = normalize_label(label)
     return any(norm_label == normalize_label(opt) for opt in options)
+
+
+def label_in_options_partial(label: str, options: List[str]) -> bool:
+    """Check if a label is partially matched based on provided options."""
+    def normalize_label(label: str) -> str:
+        return label.replace('- ', '-').strip()
+
+    norm_label = normalize_label(label)
+    return any(
+        norm_label == normalize_label(opt) or norm_label in normalize_label(opt)
+        for opt in options
+    )
 
 # Core Validation Function
 
@@ -69,7 +76,7 @@ def validate_entry(
         labels = item['labels']
         labels = labels if isinstance(labels, list) else [labels]
 
-        if not all(label_in_options(label, options) for label in labels):
+        if not all(label_in_options_partial(label, options) for label in labels):
             return False, 'Invalid option', None
 
     return True, 'Valid', response_data
@@ -86,6 +93,7 @@ def parse_automatic_annotations(
 
     level_id = raw_entries[0]["level_id"]
     prompt_id = raw_entries[0]["prompt_id"]
+    OPTIONS = io.read_json("src/scripts/taxonomy_options.json")
     task_options = extract_options(OPTIONS, level_id, prompt_id)
     if not task_options:
         return []
@@ -111,7 +119,3 @@ def parse_automatic_annotations(
         total_invalid = sum(invalid_reasons.values())
         print(f"{level_id}-{prompt_id}: {total_invalid} / {len(raw_entries)} failed due to invalid annotations.")
     return valid_entries
-
-
-
-
