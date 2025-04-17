@@ -1,0 +1,17 @@
+{
+    "prompt": {
+        "media_format": "Label all types of media that are present in the current user prompt, from the list of options below.",
+        "interaction_features": "Label all types of interaction features that are present in the current user prompt, from the list of options below.",
+        "function_purpose": "Label all types of inferrable purposes and intents that represent the apparent objective in the current user prompt, from the list of options below.",
+        "multi_turn_relationship": "Label one type of relationship that is present between the previous user prompt and the current user prompt in the conversation, from the list of options below."
+    },
+    "response": {
+        "media_format": "Label all types of media that are present in the current model response, from the list of options below.",
+        "interaction_features": "Label all types of interaction features that are present in the current model response, from the list of options below. Only count these if they are part of the model's communication to the user rather than part of solicited content, like a translation, movie script, or a role it is playing.",
+        "answer_form": "Label one type of answer format that represents how the model responds in the current turn, from the list of options below."
+    },
+    "turn": {
+        "topic": "Label all topics that are present in the current conversation turn, from the list of options below.",
+        "sensitive_use_flags": "Label all instances of sensitive content in the current conversation turn, from the list of options below. Please flag any content that relates to these categories, even if it was not inherent in the request: e.g. if the user asks the system to count the words in a violent or sexual story, or if the user asks the system to answer a list of questions (e.g., homework)."
+    }
+}
