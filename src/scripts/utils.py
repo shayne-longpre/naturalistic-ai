@@ -8,12 +8,6 @@ sys.path.append("./")
 sys.path.append("src/")
 
 
-def read_json(json_file):
-    with open(json_file, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    return data
-
-
 def batch_generator(data_list, batch_size):
     for i in range(0, len(data_list), batch_size):
         yield data_list[i:i + batch_size]

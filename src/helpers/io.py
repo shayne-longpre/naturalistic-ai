@@ -164,13 +164,13 @@ def huggingface_download(
 
     # num_proc = max(multiprocessing.cpu_count() // 2, 1)
     if data_files:
-        dset = load_dataset(data_address, data_files=data_files, token=True)
+        dset = load_dataset(data_address, data_files=data_files, use_auth_token=True)
     elif data_dir:
-        dset = load_dataset(data_address, data_dir=data_dir, token=True)
+        dset = load_dataset(data_address, data_dir=data_dir, use_auth_token=True)
     elif name:
-        dset = load_dataset(data_address, name, token=True)
+        dset = load_dataset(data_address, name, use_auth_token=True)
     else:
-        dset = load_dataset(data_address, token=True)
+        dset = load_dataset(data_address, use_auth_token=True)
 
     if split:
         dset = dset[split]

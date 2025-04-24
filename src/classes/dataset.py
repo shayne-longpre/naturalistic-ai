@@ -2,6 +2,7 @@ import sys
 import random
 import typing
 import json
+import os
 from torch.utils.data import DataLoader
 import pandas as pd 
 import itertools
@@ -54,7 +55,7 @@ class Dataset(object):
 
     def save_to_json(self, json_path: str):
         """Save the current state to a JSON file."""
-        os.makedirs(json_path, exist_ok=True)
+        # os.makedirs(os.path.dirname(json_path), exist_ok=True)
         with open(json_path, 'w') as f:
             json.dump(self.to_dict(), f, indent=4)
 
