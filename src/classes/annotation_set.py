@@ -97,7 +97,8 @@ class AnnotationSet(object):
             dataset_id=dataset_id,
             annotations=[
                 AnnotationRecord(
-                    value=x["parsed_response"], 
+                    value=x["parsed_response"],
+                    confidence=x["parsed_confidence"],
                     target_id=x["conversation_id"] + "-" + str(x["turn"]),
                     annotator=x.get("model"),
                 ) 
