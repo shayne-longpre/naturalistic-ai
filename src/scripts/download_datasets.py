@@ -86,6 +86,41 @@ def download_wildchat_v1():
     
     return [process_data(datum) for datum in tqdm(dset, desc="Processing WildChat")]
 
+# Download WildChat (private repo)
+def download_wildchat_private(sample=None):
+    print("Starting Download for Yuntian's WildChat-1M-Full...")
+    dset = io.huggingface_download("yuntian-deng/WildChat-1M-Full-with-parameters-internal", split="train", sample=sample)
+
+    def process_data(datum):
+        state = datum.get('state')
+        country = f"{datum.get('country', 'Unknown')}"
+        timestamp = datum.get('timestamp')
+
+        conversation = [
+            {
+                "role": msg.get("role"),
+                "turn": idx,
+                "content": msg.get("content", ""),
+                "image": "",
+            }
+            for idx, msg in enumerate(datum.get("conversation", []))
+        ]
+
+        return Conversation(
+            conversation_id="wildchat_" + datum.get('conversation_hash'),
+            dataset_id="wildchat_1m_full",
+            user_id=datum.get('hashed_ip'),
+            time=timestamp.isoformat() if isinstance(timestamp, datetime) else None,
+            model=datum.get('model'),
+            conversation=conversation,
+            geography=country if state is None else f"{country}; {state}",
+            languages=None,
+        )
+
+    processed_data = [process_data(datum) for datum in tqdm(dset, desc="Processing WildChat Full")]
+    dataset = Dataset(dataset_id="wildchat_1m_full", data=processed_data)
+    return dataset
+
 # Download ShareGPT
 def download_sharegpt_v1():
     print("Starting Download for ShareGPT...")
@@ -365,8 +400,11 @@ def download_swebench():
         )
     
     return [process_data(datum) for datum in tqdm(dset, desc="Processing GPQA")]
+
+
 DOWNLOAD_FUNCTIONS = {
     "wildchat_v1": download_wildchat_v1,
+    "wildchat_private": download_wildchat_private,
     "lmsys_1m": download_lmsys_1m,
     "sharegpt_v1": download_sharegpt_v1,
     "chatbot_arena": download_chatbot_arena,
@@ -419,4 +457,4 @@ if __name__ == "__main__":
         help="By default, Datasets are saved in data/dataset_downloads/<dataset_id>_<sample>.json for consistency. To define a specific save path instead, provide the full path here."
     )
     args = parser.parse_args()
-    main(args.dataset_id, args.sample, args.dataset_folder, args.save_path_overwrite)
+    main(args.dataset_id, args.sample, args.save_path_overwrite)

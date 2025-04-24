@@ -1,19 +1,16 @@
-import pandas as pd 
-import jsonlines 
-import json
-import argparse
-import os
 from typing import Literal
-import numpy as np
 import sys
+
 sys.path.append("./")
 sys.path.append("src/")
+
 from src.scripts.dataset_utils import Dataset, Conversation
 
 
 DATASET_LOCATIONS = {
     ### User Datasets ###
     "wildchat_v1": "dataset_downloads/wildchat_v1",
+    "wildchat_private": "dataset_downloads/wildchat_1m_full",
     "lmsys_1m": "dataset_downloads/lmsys_1m",
     "sharegpt_v1": "dataset_downloads/sharegpt_v1",
 
@@ -28,6 +25,7 @@ DATASET_LOCATIONS = {
 DATASET_CATEGORIES = {
     ### User Datasets ###
     "wildchat_v1": "conversation",
+    "wildchat_private": "conversation",
     "lmsys_1m": "conversation",
     "sharegpt_v1": "conversation",
     
@@ -43,6 +41,7 @@ DATASET_CATEGORIES = {
 DATASET_SIZES = {
     ### User Datasets ###
     "wildchat_v1": 1000000,
+    "wildchat_private": 1000000,
     "lmsys_1m": 1000000,
     "sharegpt_v1": 90665,
     
@@ -127,4 +126,3 @@ def load_datasets(by: Literal["id", "category", "size"], ids:list[str]=[], categ
         datasets.append(dataset)
     
     return datasets
-
