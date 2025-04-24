@@ -93,7 +93,7 @@ def parse_automatic_annotations(
 
     level_id = raw_entries[0]["level_id"]
     prompt_id = raw_entries[0]["prompt_id"]
-    OPTIONS = io.read_json("src/scripts/taxonomy_options.json")
+    OPTIONS = io.read_json("../src/scripts/taxonomy_options.json")
     task_options = extract_options(OPTIONS, level_id, prompt_id)
     if not task_options:
         return []
@@ -106,13 +106,16 @@ def parse_automatic_annotations(
             continue
 
         valid_labels = []
+        valid_confidences = []
         for item in response_data:
             if item.get("confidence", 1.0) >= conf_threshold:
                 labels = item['labels'] if isinstance(item['labels'], list) else [item['labels']]
+                confidences = item['confidence'] if isinstance(item['confidence'], list) else [item['confidence']]
                 valid_labels.extend(labels)
+                valid_confidences.extend(confidences)
 
         new_entry = copy.deepcopy(entry)
-        new_entry.update({"parsed_response": valid_labels})
+        new_entry.update({"parsed_response": valid_labels, "parsed_confidence": valid_confidences})
         valid_entries.append(new_entry)
 
     if verbose:

@@ -116,21 +116,93 @@ class Dataset(object):
         if annotation_set.level == "conversation":
             for annotation in annotation_set.annotations:
                 self.data[conv_id_to_idx[annotation.target_id]].metadata.update({
-                    f"{annotation_set.source}-{annotation_set.name}": annotation})
+                    f"{annotation_set.source}-{annotation_set.level}-{annotation_set.name}": {
+                        "value": annotation.value,
+                        "confidence": annotation.confidence
+                    }
+                    })
         # or add to messages
-        elif annotation_set.level == "message":
+        # elif annotation_set.level == "message":
+        #     for annotation in annotation_set.annotations:
+        #         conv_id, turn_id = annotation.target_id.split("-")
+        #         self.data[conv_id_to_idx[conv_id]].conversation[int(turn_id)].metadata.update({
+        #             f"{annotation_set.source}-{annotation_set.name}": annotation})
+        elif annotation_set.level in {"message", "prompt", "response", "turn"}:
             for annotation in annotation_set.annotations:
                 conv_id, turn_id = annotation.target_id.split("-")
-                self.data[conv_id_to_idx[conv_id]].conversation[int(turn_id)].metadata.update({
-                    f"{annotation_set.source}-{annotation_set.name}": annotation})
+                if conv_id not in conv_id_to_idx:
+                    if verbose:
+                        print(f"[WARN] conversation_id '{conv_id}' not found in dataset.")
+                    continue
+
+                conv_idx = conv_id_to_idx[conv_id]
+                conversation = self.data[conv_idx].conversation
+                turn_idx = int(turn_id)
+
+                if turn_idx >= len(conversation):
+                    if verbose:
+                        print(f"[WARN] turn index {turn_idx} out of bounds for conversation '{conv_id}' with {len(conversation)} turns.")
+                    continue
+
+                conversation[turn_idx].metadata.update({
+                    f"{annotation_set.source}-{annotation_set.level}-{annotation_set.name}": {
+                        "value": annotation.value,
+                        "confidence": annotation.confidence
+                    }
+                })
         else:
             raise Exception
+        
+    
+    def get_confidence_distribution(
+        self,
+        name: str,
+        level: str,
+        annotation_source: typing.Optional[str] = None,
+        bin_size: float = 0.1,
+        ) -> typing.Dict[str, int]:
+        """
+        Get the distribution of confidence scores for a specific feature.
+
+        Args:
+            name: Name of the annotation feature to analyze (e.g., 'media_format')
+            level: The level (e.g., 'message', 'prompt', 'response')
+            annotation_source: The source used during annotation (e.g., 'automatic_v0')
+            bin_size: The bin size for grouping confidence values (default: 0.1)
+
+        Returns:
+            Dictionary mapping confidence bins to counts
+        """
+        confidence_distribution = {}
+
+        def bin_confidence(conf, bin_size):
+            binned = round(conf / bin_size) * bin_size
+            return f"{binned:.1f}"
+
+        for conv in self.data:
+            for msg in conv.conversation:
+                meta_key = f"{annotation_source}-{level}-{name}"
+                if meta_key in msg.metadata:
+                    confidence = msg.metadata[meta_key].get("confidence", None)
+                    if confidence is None:
+                        continue
+
+                    # Handle list of confidences (multi-label)
+                    if isinstance(confidence, list):
+                        for conf in confidence:
+                            binned_conf = bin_confidence(conf, bin_size)
+                            confidence_distribution[binned_conf] = confidence_distribution.get(binned_conf, 0) + 1
+                    else:
+                        binned_conf = bin_confidence(confidence, bin_size)
+                        confidence_distribution[binned_conf] = confidence_distribution.get(binned_conf, 0) + 1
+
+        return dict(sorted(confidence_distribution.items()))
 
             
     def get_annotation_distribution(
         self, 
         name: str,
-        level: str = "conversation",
+        level: str,
         annotation_source: typing.Optional[str] = None,
         annotation_as_list_type: bool = False,
     ) -> typing.Dict[str, int]:
@@ -162,32 +234,23 @@ class Dataset(object):
                 distribution[value] = distribution.get(value, 0) + 1
             return distribution
 
-        
-        # Check if we're looking for a built-in attribute (like 'model')
-        if level == "conversation" and annotation_source is None:
+        if annotation_source is None:
             assert hasattr(self.data[0], name), f"Every conversation should have {name} attribute."
             for conv in self.data:
-                value = getattr(conv, name)
-                distribution = update_value(distribution, value)
-        elif level == "message"  and annotation_source is None:
-            assert hasattr(self.data[0].conversation[0], name), f"Every message should have {name} attribute."
-            for conv in self.data:
-                for message in conv.conversation:
-                    value = getattr(message, name)
-                    distribution = update_value(distribution, value)
-        elif level == "conversation":
-            for conv in self.data:
-                if f"{annotation_source}-{name}" in conv.metadata:
-                    value = conv.metadata[f"{annotation_source}-{name}"].value
+                value = getattr(conv, name, None)
+                if value is not None:
                     distribution = update_value(distribution, value)
         else:
             for conv in self.data:
                 for msg in conv.conversation:
-                    if f"{annotation_source}-{name}" in msg.metadata:
-                        value = msg.metadata[f"{annotation_source}-{name}"].value
-                        distribution = update_value(distribution, value)
-                    
-        return distribution
+                    meta_key = f"{annotation_source}-{level}-{name}"
+                    if meta_key in msg.metadata:
+                        meta_info = msg.metadata[meta_key]
+                        value = meta_info.get("value", None)
+                        if value is not None:
+                            distribution = update_value(distribution, value)
+
+        return distribution        
 
 
     def get_joint_distribution(
@@ -318,7 +381,7 @@ class Dataset(object):
                         value_exists2 += exists2
 
             if verbose:
-                print(f"Found {value_exists1} items with `{source1}-{name1}`, and {value_exists2} with `{source2}-{name2}`.")
+                print(f"Found {value_exists1} items with `{source1}-{level}-{name1}`, and {value_exists2} with `{source2}-{level}-{name2}`.")
                 print(f"Generated {len(annotation_pairs)} label-level pairs (at level={level}) out of {total_items} total items.")
             return annotation_pairs, combination_pairs
 
