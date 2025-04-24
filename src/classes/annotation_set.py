@@ -26,7 +26,7 @@ class AnnotationSet(object):
     ):
         assert "-" not in source and "-" not in name, \
             f"Please do not include '-' in source or name, as we use this character for joining/splitting keys."
-        assert level in ["conversation", "message"]
+        assert level in ["conversation", "message", "prompt", "response", "turn"]
         self.source = source
         self.name = name
         self.level = level
@@ -93,7 +93,7 @@ class AnnotationSet(object):
         return cls(
             source=source, 
             name=prompt_id, 
-            level="conversation" if level_id == "conversation" else "message",
+            level=level_id,
             dataset_id=dataset_id,
             annotations=[
                 AnnotationRecord(

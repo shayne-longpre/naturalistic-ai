@@ -115,14 +115,14 @@ class Dataset(object):
         if annotation_set.level == "conversation":
             for annotation in annotation_set.annotations:
                 self.data[conv_id_to_idx[annotation.target_id]].metadata.update({
-                    f"{annotation_set.source}-{annotation_set.name}": annotation})
+                    f"{annotation_set.source}-{annotation_set.level}-{annotation_set.name}": annotation})
         # or add to messages
         # elif annotation_set.level == "message":
         #     for annotation in annotation_set.annotations:
         #         conv_id, turn_id = annotation.target_id.split("-")
         #         self.data[conv_id_to_idx[conv_id]].conversation[int(turn_id)].metadata.update({
         #             f"{annotation_set.source}-{annotation_set.name}": annotation})
-        elif annotation_set.level in {"message", "prompt"}:
+        elif annotation_set.level in {"message", "prompt", "response", "turn"}:
             for annotation in annotation_set.annotations:
                 conv_id, turn_id = annotation.target_id.split("-")
                 if conv_id not in conv_id_to_idx:
@@ -140,7 +140,7 @@ class Dataset(object):
                     continue
 
                 conversation[turn_idx].metadata.update({
-                    f"{annotation_set.source}-{annotation_set.name}": annotation
+                    f"{annotation_set.source}-{annotation_set.level}-{annotation_set.name}": annotation
                 })
         else:
             raise Exception
@@ -149,7 +149,7 @@ class Dataset(object):
     def get_annotation_distribution(
         self, 
         name: str,
-        level: str = "conversation",
+        level: str,
         annotation_source: typing.Optional[str] = None,
         annotation_as_list_type: bool = False,
     ) -> typing.Dict[str, int]:
@@ -180,33 +180,21 @@ class Dataset(object):
             else:
                 distribution[value] = distribution.get(value, 0) + 1
             return distribution
-
         
         # Check if we're looking for a built-in attribute (like 'model')
-        if level == "conversation" and annotation_source is None:
+        if annotation_source is None:
             assert hasattr(self.data[0], name), f"Every conversation should have {name} attribute."
             for conv in self.data:
                 value = getattr(conv, name)
                 distribution = update_value(distribution, value)
-        elif level == "message"  and annotation_source is None:
-            assert hasattr(self.data[0].conversation[0], name), f"Every message should have {name} attribute."
-            for conv in self.data:
-                for message in conv.conversation:
-                    value = getattr(message, name)
-                    distribution = update_value(distribution, value)
-        elif level == "conversation":
-            for conv in self.data:
-                if f"{annotation_source}-{name}" in conv.metadata:
-                    value = conv.metadata[f"{annotation_source}-{name}"].value
-                    distribution = update_value(distribution, value)
         else:
             for conv in self.data:
                 for msg in conv.conversation:
-                    if f"{annotation_source}-{name}" in msg.metadata:
-                        value = msg.metadata[f"{annotation_source}-{name}"].value
+                    if f"{annotation_source}-{level}-{name}" in msg.metadata:
+                        value = msg.metadata[f"{annotation_source}-{level}-{name}"].value
                         distribution = update_value(distribution, value)
                     
-        return distribution
+        return distribution        
 
 
     def get_joint_distribution(
@@ -337,7 +325,7 @@ class Dataset(object):
                         value_exists2 += exists2
 
             if verbose:
-                print(f"Found {value_exists1} items with `{source1}-{name1}`, and {value_exists2} with `{source2}-{name2}`.")
+                print(f"Found {value_exists1} items with `{source1}-{level}-{name1}`, and {value_exists2} with `{source2}-{level}-{name2}`.")
                 print(f"Generated {len(annotation_pairs)} label-level pairs (at level={level}) out of {total_items} total items.")
             return annotation_pairs, combination_pairs
 
