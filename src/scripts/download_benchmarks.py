@@ -46,8 +46,7 @@ def download_lmsys_1m():
             time=None,
             model=datum.get('model'),
             conversation=conversation,
-            geography=None,
-            languages=datum.get('language', None),
+            geography=None
         )
 
     print("Processing lmsys-chat-1m into conversation format...")
@@ -80,8 +79,7 @@ def download_wildchat_v1():
             time=timestamp.isoformat() if isinstance(timestamp, datetime) else None,
             model=datum.get('model'),
             conversation=conversation,
-            geography=country if state is None else f"{country}; {state}",
-            languages=None,
+            geography=country if state is None else f"{country}; {state}"
         )
     
     return [process_data(datum) for datum in tqdm(dset, desc="Processing WildChat")]
@@ -114,12 +112,12 @@ def download_wildchat_private(sample=None):
             model=datum.get('model'),
             conversation=conversation,
             geography=country if state is None else f"{country}; {state}",
-            languages=None,
         )
 
     processed_data = [process_data(datum) for datum in tqdm(dset, desc="Processing WildChat Full")]
     dataset = Dataset(dataset_id="wildchat_1m_full", data=processed_data)
     return dataset
+
 
 # Download ShareGPT
 def download_sharegpt_v1():
@@ -162,8 +160,7 @@ def download_sharegpt_v1():
             time=None,  # TODO: fill in rough period
             model=None,  # TODO: fill in OpenAI models at that time
             conversation=conversation,
-            geography=None,
-            languages=None,
+            geography=None
         )
 
     return [process_data(datum) for datum in tqdm(full_dset, desc="Processing ShareGPT")] 
@@ -203,8 +200,7 @@ def download_chatbot_arena():
             time=timestamp.isoformat() if isinstance(timestamp, datetime) else None,
             model=datum.get('model_a'),
             conversation=conv_a_reformatted,
-            geography=country if state is None else f"{country}; {state}",
-            languages=datum.get("language")
+            geography=country if state is None else f"{country}; {state}"
         )
         
         conversation_b = Conversation(
@@ -214,8 +210,7 @@ def download_chatbot_arena():
             time=timestamp.isoformat() if isinstance(timestamp, datetime) else None,
             model=datum.get('model_b'),
             conversation=conv_b_reformatted,
-            geography=country if state is None else f"{country}; {state}",
-            languages=datum.get("language")
+            geography=country if state is None else f"{country}; {state}"
         )
 
         return conversation_a, conversation_b 
@@ -252,14 +247,13 @@ def download_alpaca_eval():
 
         
         return Conversation(
-            conversation_id="alpaca_eval_" + str(uuid.uuid4()),
+            conversation_id="alpaca_eval" + str(uuid.uuid4()),
             dataset_id="alpaca_eval",
             user_id=str(uuid.uuid4()),
             time=None,
             model=datum.get('generator'),
             conversation=conv,
-            geography="Unknown",
-            languages="English"
+            geography="Unknown"
         )
         
 
@@ -284,14 +278,13 @@ def download_mmlu():
             ]
 
             return Conversation(
-                conversation_id="mmlu_" + str(uuid.uuid4()),
+                conversation_id="mmlu_" + str(uuid.uuid4()).replace("-", ""),
                 dataset_id="mmlu",
-                user_id=str(uuid.uuid4()),
+                user_id=str(uuid.uuid4()).replace("-", ""),
                 time=None,
                 model=None,
                 conversation=conv,
-                geography="Unknown",
-                languages="English"
+                geography="Unknown"
             )
     
     conversations_to_return = []
@@ -318,14 +311,13 @@ def download_hle():
         ]
         
         return Conversation(
-            ex_id="hle_" + datum.get('id'),
+            conversation_id="hle_" + datum.get('id'),
             dataset_id="hle",
             user_id=str(datum.get('author_name')),
             time="02/11/2025", # huggingface release date
             model=None,
             conversation=conv,
-            geography="Unknown",
-            languages="English"
+            geography="Unknown"
         )
     
     
@@ -358,14 +350,13 @@ def download_gpqa():
         
 
         return Conversation(
-            ex_id="gpqa_" + datum.get('Record ID'),
+            conversation_id="gpqa_" + datum.get('Record ID'),
             dataset_id="gpqa",
             user_id=str(datum.get('Question Writer')),
             time="11/29/2023",
             model=None,
             conversation=conv,
-            geography="Unknown",
-            languages="English"
+            geography="Unknown"
         )
     
     return [process_data(datum) for datum in tqdm(dset, desc="Processing GPQA")]
@@ -389,18 +380,16 @@ def download_swebench():
         
 
         return Conversation(
-            ex_id="swebench_" + datum.get('instance_id'),
+            conversation_id="swebench_" + datum.get('instance_id'),
             dataset_id="swebench",
             user_id=str(datum.get('repo')), # Is the repo a good indicator of user_id?
             time=datum.get('created_at').isoformat() if isinstance(datum.get('timestamp'), datetime) else None,
             model=None,
             conversation=conv,
-            geography="Unknown",
-            languages="Unknown"
+            geography="Unknown"
         )
     
     return [process_data(datum) for datum in tqdm(dset, desc="Processing GPQA")]
-
 
 DOWNLOAD_FUNCTIONS = {
     "wildchat_v1": download_wildchat_v1,
@@ -416,10 +405,10 @@ DOWNLOAD_FUNCTIONS = {
 }
 
 
-def main(
+def download_dataset(
     dataset_id:str, 
-    sample: int,
-    save_path_overwrite: str, 
+    sample: int = None,
+    save_path_overwrite: str = None, 
 ):
     # Check args 
     assert dataset_id in DOWNLOAD_FUNCTIONS, f"{dataset_id} not in {DOWNLOAD_FUNCTIONS.keys()}"
@@ -427,13 +416,18 @@ def main(
     # Download data and optionally sample
     data_download_fn = DOWNLOAD_FUNCTIONS[dataset_id]
     data = data_download_fn()
-    if sample:
+    if sample is not None:
         data = random.sample(data, int(sample))
 
     # Write to file 
-    save_path = save_path_overwrite if save_path_overwrite else f"data/dataset_downloads/{dataset_id}_{len(data)}.json"
+    if save_path_overwrite is not None: 
+        save_path = save_path_overwrite 
+    else: 
+       save_path = f"datasets/{dataset_id}/full.json"
+    
     dset = Dataset(dataset_id=dataset_id, data=data)
-    dset.save_to_json(save_path)
+    print(f"Saving {len(data)} conversations to {save_path}...")
+    dset.save_to_json(json_path = f"datasets/{dataset_id}/full.json")
     
 
 if __name__ == "__main__":
@@ -454,7 +448,8 @@ if __name__ == "__main__":
         "--save_path_overwrite",
         required=False,
         default="",
-        help="By default, Datasets are saved in data/dataset_downloads/<dataset_id>_<sample>.json for consistency. To define a specific save path instead, provide the full path here."
+        help="By default, Datasets are saved in data/<dataset_id>/full.json for consistency. To define a specific save path instead, provide the full path here."
     )
     args = parser.parse_args()
-    main(args.dataset_id, args.sample, args.save_path_overwrite)
+    download_dataset(args.dataset_id, args.sample, args.save_path_overwrite)
+    # download_dataset(args.dataset_id, args.sample, args.dataset_folder, args.save_path_overwrite)
