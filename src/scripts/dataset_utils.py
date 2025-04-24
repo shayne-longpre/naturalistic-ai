@@ -1,3 +1,7 @@
+import sys
+sys.path.append("./")
+sys.path.append("src/")
+sys.path.append("src/scripts/")
 import random
 from typing import List
 from torch.utils.data import DataLoader
@@ -41,20 +45,20 @@ def process_csv_into_conversations(path):
                 conv_unpacked.append(turn_as_dict)
      
         conv_obj = Conversation(
-            ex_id=row["ex_id"],
+            conversation_id=row["conversation_id"],
             dataset_id=row["dataset_id"],
             user_id=row["user_id"],
             time=row["time"],
             model=row["model"],
             conversation=conv_unpacked,
-            geography=row["geography"],
-            languages=row["languages"]
+            geography=row["geography"]
         )
         conversations.append(conv_obj)
         
     return conversations
 
 def process_jsonl_into_conversations(path):
+    
     conversations = []
   
     with jsonlines.open(path) as reader:
@@ -65,14 +69,13 @@ def process_jsonl_into_conversations(path):
             ]
             
             conv_obj = Conversation(
-                ex_id=item["ex_id"],
+                conversation_id=item["conversation_id"],
                 dataset_id=item["dataset_id"],
                 user_id=item["user_id"],
                 time=item["time"],
                 model=item["model"],
                 conversation=conversation,
-                geography=item["geography"],
-                languages=item["languages"]
+                geography=item["geography"]
             )
 
             conversations.append(conv_obj)
@@ -83,20 +86,27 @@ def process_json_into_conversations(path):
     conversations = []
     with open(path, 'r') as file:
         data = json.load(file)
+        dataset_id = data["dataset_id"]
+        data = data["data"]
         for item in data:
+            if isinstance(item, str):
+                item = json.loads(item)
+
             conversation = [
-                {"text": turn["text"], "image": turn["image"]} for turn in item["conversation"]
+                turn for turn in (
+                    json.loads(turn) if isinstance(turn, str) else turn 
+                    for turn in item["conversation"]
+                )
             ]
             
             conv_obj = Conversation(
-                ex_id=item["ex_id"],
-                dataset_id=item["dataset_id"],
+                conversation_id=item["conversation_id"],
+                dataset_id=dataset_id,
                 user_id=item["user_id"],
                 time=item["time"],
                 model=item["model"],
                 conversation=conversation,
-                geography=item["geography"],
-                languages=item["languages"]
+                geography=item["geography"]
             )
 
             conversations.append(conv_obj)
@@ -113,23 +123,21 @@ class Conversation(object):
 
     def __init__(
         self,
-        ex_id,
+        conversation_id,
         dataset_id,
         user_id,
         time,
         model,
         conversation,
-        geography=None,
-        languages=None,
+        geography=None
     ):
-        self.ex_id = ex_id
+        self.conversation_id = conversation_id
         self.dataset_id = dataset_id
         self.user_id = user_id
         self.time = time
         self.model = model
         self.conversation = conversation
         self.geography = geography
-        self.languages = languages
 
     def to_dict(self, unpack_conversation=False, convert_image_to_PIL = False, convert_image_to_np = False):
         """
@@ -140,13 +148,12 @@ class Conversation(object):
             -- convert_image_to_np is set to True, the image is converted to a numpy array. Only valid if unpacking the conversation.
         """
         obj = {
-            "ex_id": self.ex_id,
+            "conversation_id": self.conversation_id,
             "dataset_id": self.dataset_id,
             "user_id": self.user_id,
             "time": self.time,
             "model": self.model,
-            "geography": self.geography,
-            "languages": self.languages,
+            "geography": self.geography
         }
         if convert_image_to_PIL:
             image_transform = io.convert_base64_to_PIL_image
@@ -180,9 +187,7 @@ class Dataset():
 
     def __init__(self, dataset_id: str, data:List[Conversation] = []):
         self.dataset_id:str = dataset_id
-        self.data:List[Conversation] = data
-        if len(data) ==0: 
-            warnings.warn("No Data Provided to the Dataset class. Please load data using the load_data_from_file() function.")
+        self.data:List[Conversation] = data    
         if len(self.data) > 0:
             self.features = list(data[0].to_dict().keys())
         else: 
@@ -192,13 +197,17 @@ class Dataset():
         return len(self.data)
 
     ### Operations ###
-    def sample(self, n):
+    def random_sample(self, n):
         """Sample n conversations from the dataset."""
         if len(self.data)>0:
             return random.sample(self.data, n)
         else: 
             warnings.warn("Cannot sample data, as no data has been loaded. Load data by calling load_data_from_file()")
             return self.data
+    
+    def random_stratified_sample(self, n):
+        warnings.warn("Stratified sampling not implemented yet for this dataset. There is no general implementation of stratified sampling, because each dataset has unique groups, or none at all. If you think this is incorrect, please look at the src/scripts/dataset_utils.py file. ")
+        return 
 
     def slice(self, start, end):
         """Get a slice of the dataset from start to end."""
@@ -233,7 +242,7 @@ class Dataset():
     def get_feature(self, feature, as_pandas = False):
         """
         This function by default returns the data as 2 lists, one of the example ids and one of the requested feature. 
-        If as_pandas is set to True, the function returns a pandas Dataframe with two columns, ex_id and the requested feature.
+        If as_pandas is set to True, the function returns a pandas Dataframe with two columns, conversation_id and the requested feature.
         """
         if len(self.data)>0:
             warnings.warn("Cannot get feature, as no data has been loaded. Load data by calling load_data_from_file().")
@@ -244,11 +253,11 @@ class Dataset():
             features = []
             for conv in self.data: 
                 conv_dict = conv.to_dict()
-                ids.append(conv_dict["ex_id"])
+                ids.append(conv_dict["conversation_id"])
                 features.append(conv_dict[feature])
             
             if as_pandas: 
-                return pd.DataFrame.from_dict({"ex_id": ids, f"{feature}": features})
+                return pd.DataFrame.from_dict({"conversation_id": ids, f"{feature}": features})
             else: 
                 return ids, features
         else: 
@@ -301,12 +310,12 @@ class Dataset():
   
         # Check all extensions at the provided folder, as well as the default download location.
         paths_to_check = [
-            f"{path_to_dataset_downloads}/{self.dataset_id}/dataset.json",
-            f"{path_to_dataset_downloads}/{self.dataset_id}/dataset.jsonl",
-            f"{path_to_dataset_downloads}/{self.dataset_id}/dataset.csv",
-            f"dataset_downloads/{self.dataset_id}/dataset.json",
-            f"dataset_downloads/{self.dataset_id}/dataset.jsonl",
-            f"dataset_downloads/{self.dataset_id}/dataset.csv"
+            f"{path_to_dataset_downloads}/{self.dataset_id}/full.json",
+            f"{path_to_dataset_downloads}/{self.dataset_id}/full.jsonl",
+            f"{path_to_dataset_downloads}/{self.dataset_id}/full.csv",
+            f"dataset_downloads/{self.dataset_id}/full.json",
+            f"dataset_downloads/{self.dataset_id}/full.jsonl",
+            f"dataset_downloads/{self.dataset_id}/full.csv"
         ]
 
         path_to_use = next((path for path in paths_to_check if os.path.exists(path)), None)
@@ -342,18 +351,24 @@ class Dataset():
             warnings.warn("Cannot write data to file, as no data has been loaded. Load data by calling load_data_from_file().")
             return 
         
-        assert dataset_file_type in ["json", "jsonl", "csv"], f"{dataset_file_type} is not one of [json, jsonl, csv]."
         if save_path_overwrite: 
             save_path = save_path_overwrite
+            print(f"Writing to {save_path} instead of the default location.")
         else: 
             os.makedirs(f"{dataset_folder}", exist_ok=True)
             os.makedirs(f"{dataset_folder}/{self.dataset_id}", exist_ok=True)
             save_path = f"{dataset_folder}/{self.dataset_id}/dataset.{dataset_file_type}"
         
+        assert dataset_file_type in ["json", "jsonl", "csv"], f"{dataset_file_type} is not one of [json, jsonl, csv]."
         if save_path.endswith(".jsonl"):
             dset = [x.to_dict() for x in self.data]
             io.write_jsonl(dset, save_path)
         
+        if save_path.endswith(".json"):
+            dset = [x.to_dict() for x in self.data]
+            with open(save_path, 'w') as f:
+                json.dump(dset, f, indent=4)
+            
         elif save_path.endswith(".csv"):
             
             dset_df = pd.DataFrame([x.to_dict(unpack_conversation=True) for x in self.data])

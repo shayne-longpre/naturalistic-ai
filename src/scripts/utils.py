@@ -29,10 +29,10 @@ def append_jsonl(data, file_path):
         print(f"Error writing to {file_path}: {e}")
 
 
-def load_existing_ex_ids(save_fpath):
+def load_existing_conversation_ids(save_fpath):
     try:
         existing_data = io.read_jsonl(save_fpath)
-        return {entry["ex_id"] for entry in existing_data}
+        return {entry["conversation_id"] for entry in existing_data}
     except FileNotFoundError:
         return set()
 
@@ -46,7 +46,7 @@ def load_existing_exid_turn_pairs(filepath):
         for line in f:
             if line.strip():
                 data = json.loads(line)
-                pair = (data.get('ex_id'), data.get('turn'))
+                pair = (data.get('conversation_id'), data.get('turn'))
                 existing_pairs.add(pair)
     return existing_pairs
 

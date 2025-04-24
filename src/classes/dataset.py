@@ -7,6 +7,7 @@ import pandas as pd
 import itertools
 from collections import defaultdict, Counter
 from sklearn.metrics import cohen_kappa_score, confusion_matrix
+import os 
 
 sys.path.append("./")
 
@@ -20,7 +21,6 @@ A Dataset is used to define the collection of conversations or samples.
 To download a dataset, use the download_datasets.py file. 
 To load a dataset, use the load_datasets.py file. 
 """
-
     
 
 class Dataset(object): 
@@ -54,14 +54,14 @@ class Dataset(object):
 
     def save_to_json(self, json_path: str):
         """Save the current state to a JSON file."""
-        os.makedirs(json_path, exist_ok=True)
+        os.makedirs(os.path.dirname(json_path), exist_ok=True)
         with open(json_path, 'w') as f:
             json.dump(self.to_dict(), f, indent=4)
 
     def __len__(self):
         return len(self.data)
 
-    def sample(self, n):
+    def random_sample(self, n):
         """Sample n conversations from the dataset."""
         return random.sample(self.data, n)
 

@@ -1,8 +1,10 @@
 import sys
 import typing
 
-sys.path.append("./")
 
+sys.path.append("./")
+sys.path.append("src/")
+sys.path.append("src/scripts/")
 from src.classes.message import Message
 from src.classes.annotation_record import AnnotationRecord
 
