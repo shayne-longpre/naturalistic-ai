@@ -2,25 +2,24 @@ from typing import Literal
 import sys
 
 sys.path.append("./")
-sys.path.append("src/")
 
-from src.scripts.dataset_utils import Dataset, Conversation
+from src.classes.dataset import Dataset
 
 
 DATASET_LOCATIONS = {
     ### User Datasets ###
-    "wildchat_v1": "dataset_downloads/wildchat_v1",
+    "wildchat_v1": "datasets/wildchat_v1/full.json",
     "wildchat_private": "dataset_downloads/wildchat_1m_full",
-    "lmsys_1m": "dataset_downloads/lmsys_1m",
-    "sharegpt_v1": "dataset_downloads/sharegpt_v1",
+    "lmsys_1m": "datasets/lmsys_1m/full.json",
+    "sharegpt_v1": "datasets/sharegpt_v1/full.json",
 
     ### Benchmarks ###
-    "chatbot_arena": "dataset_downloads/chatbot_arena",
-    "alpaca_eval": "dataset_downloads/alpaca_eval",
-    "mmlu": "dataset_downloads/mmlu",
-    "hle": "dataset_downloads/hle",
-    "gpqa": "dataset_downloads/gpqa",
-    "swebench": "dataset_downloads/swebench",
+    "chatbot_arena": "datasets/chatbot_arena/full.json",
+    "alpaca_eval": "datasets/alpaca_eval/full.json",
+    "mmlu": "datasets/mmlu/full.json",
+    "hle": "datasets/hle/full.json",
+    "gpqa": "datasets/gpqa/full.json",
+    "swebench": "datasets/swebench/full.json",
 }
 DATASET_CATEGORIES = {
     ### User Datasets ###
@@ -121,8 +120,8 @@ def load_datasets(by: Literal["id", "category", "size"], ids:list[str]=[], categ
     # Load the dataset objects and return 
     datasets = []
     for dataset_id in matching_dataset_ids: 
-        dataset = Dataset(dataset_id=dataset_id)
-        dataset.load_data_from_file(path_to_dataset_downloads = path_to_dataset_downloads)
-        datasets.append(dataset)
+        dataset = Dataset(dataset_id=dataset_id, data = [])
+        dataset_with_data = dataset.load(json_path =DATASET_LOCATIONS[dataset_id])
+        datasets.append(dataset_with_data)
     
     return datasets
