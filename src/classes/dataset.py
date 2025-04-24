@@ -117,11 +117,31 @@ class Dataset(object):
                 self.data[conv_id_to_idx[annotation.target_id]].metadata.update({
                     f"{annotation_set.source}-{annotation_set.name}": annotation})
         # or add to messages
-        elif annotation_set.level == "message":
+        # elif annotation_set.level == "message":
+        #     for annotation in annotation_set.annotations:
+        #         conv_id, turn_id = annotation.target_id.split("-")
+        #         self.data[conv_id_to_idx[conv_id]].conversation[int(turn_id)].metadata.update({
+        #             f"{annotation_set.source}-{annotation_set.name}": annotation})
+        elif annotation_set.level in {"message", "prompt"}:
             for annotation in annotation_set.annotations:
                 conv_id, turn_id = annotation.target_id.split("-")
-                self.data[conv_id_to_idx[conv_id]].conversation[int(turn_id)].metadata.update({
-                    f"{annotation_set.source}-{annotation_set.name}": annotation})
+                if conv_id not in conv_id_to_idx:
+                    if verbose:
+                        print(f"[WARN] conversation_id '{conv_id}' not found in dataset.")
+                    continue
+
+                conv_idx = conv_id_to_idx[conv_id]
+                conversation = self.data[conv_idx].conversation
+                turn_idx = int(turn_id)
+
+                if turn_idx >= len(conversation):
+                    if verbose:
+                        print(f"[WARN] turn index {turn_idx} out of bounds for conversation '{conv_id}' with {len(conversation)} turns.")
+                    continue
+
+                conversation[turn_idx].metadata.update({
+                    f"{annotation_set.source}-{annotation_set.name}": annotation
+                })
         else:
             raise Exception
 

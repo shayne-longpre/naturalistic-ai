@@ -93,7 +93,7 @@ def parse_automatic_annotations(
 
     level_id = raw_entries[0]["level_id"]
     prompt_id = raw_entries[0]["prompt_id"]
-    OPTIONS = io.read_json("src/scripts/taxonomy_options.json")
+    OPTIONS = io.read_json("../src/scripts/taxonomy_options.json")
     task_options = extract_options(OPTIONS, level_id, prompt_id)
     if not task_options:
         return []
