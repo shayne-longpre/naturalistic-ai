@@ -55,26 +55,26 @@ class AnnotationSet(object):
         )
 
 
-    @classmethod
-    def load_labelstudio(cls, json_path: str, source: str):
-        """Alternative constructor that initializes from LabelStudio file(s)."""
-        # Parse all the Label Studio annotations together
-        annotations = parse_labelstudio_files(json_path)
+    # @classmethod
+    # def load_labelstudio(cls, json_path: str, source: str):
+    #     """Alternative constructor that initializes from LabelStudio file(s)."""
+    #     # Parse all the Label Studio annotations together
+    #     annotations = parse_labelstudio_files(json_path)
         
-        # Create a new instance with the remaining data
-        return cls(
-            source=source, 
-            name=data["name"], 
-            level=data["level"],
-            dataset_id=data["dataset_id"],
-            annotations=[
-                AnnotationRecord(
-                    value=x["value"], 
-                    target_id=x["target_id"],
-                    annotator=x.get("annotator"),
-                ) 
-                for x in data["annotations"]],
-        )
+    #     # Create a new instance with the remaining data
+    #     return cls(
+    #         source=source, 
+    #         name=data["name"], 
+    #         level=data["level"],
+    #         dataset_id=data["dataset_id"],
+    #         annotations=[
+    #             AnnotationRecord(
+    #                 value=x["value"], 
+    #                 target_id=x["target_id"],
+    #                 annotator=x.get("annotator"),
+    #             ) 
+    #             for x in data["annotations"]],
+    #     )
 
     @classmethod
     def load_automatic(
@@ -98,7 +98,7 @@ class AnnotationSet(object):
             annotations=[
                 AnnotationRecord(
                     value=x["parsed_response"], 
-                    target_id=x["ex_id"] + "-" + str(x["turn"]),
+                    target_id=x["conversation_id"] + "-" + str(x["turn"]),
                     annotator=x.get("model"),
                 ) 
                 for x in annotations],
@@ -159,7 +159,7 @@ def process_annotations_to_annotation_sets(
             source=source,
             name=task_name,
             level="message",
-            dataset_id="sample120", # TODO: Fix.
+            dataset_id="wildchat_1m", # TODO: Fix.
             annotations=[
                 AnnotationRecord(
                     value=x["annotation_value"],
@@ -169,3 +169,15 @@ def process_annotations_to_annotation_sets(
             ]
         ) for task_name, data in task_groups.items()
     }
+
+
+if __name__ == "__main__":
+    input_file = 'res/wildchat4k-gpto3mini-json/prompt_function_purpose.jsonl'
+
+    annotation_set = AnnotationSet.load_automatic(
+        path=input_file,
+        source='o3mini'
+    )
+
+    save_path = 'prompt_function_purpose.json'
+    annotation_set.save_to_json(save_path)
