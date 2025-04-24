@@ -12,4 +12,4 @@
 - Add `wildchat4k-raw.json` file to `data/static/wildchat4k-raw.json`
 - Add annotations under `res/gpto3mini-json-wildchat`
 
-4. If you run the **Load Dataset + Annotations** section in the `topics.ipynb`, you will be able to load the annotations and start your analysis!
+4. If you copy the **Load Dataset + Annotations** section in the `descriptive_analysis.ipynb`, you will be able to load the annotations and start your analysis!
