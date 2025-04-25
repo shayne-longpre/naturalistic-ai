@@ -76,16 +76,77 @@ class Dataset(object):
             return [cc.to_dict() for cc in self.data if cc.conversation_id in ids]
         else:
             return [m.to_dict() for cc in self.data for m in cc.conversation if f"{cc.conversation_id}-{m.turn}" in ids]
+    
 
-    # def apply_filter(
-    #     self, 
-    #     filter_fn,
-    #     level: str = "conversation",
-    # ):
-    #     if level == "conversation":
-    #         self.data = [conv for conv in self.data if filter_fn(conv)]
-    #     else: # level == "message"
-    #         self.data = [conv for conv in self.data if filter_fn(conv)]
+    def extract_conversation_metadata_by_ids(
+        self,
+        ex_ids: typing.List[str],
+        annotation_keys: typing.List[typing.Tuple[str, typing.Optional[str]]], 
+        level: str = "conversation",
+    ):
+        """
+        Returns:
+            {ex_id -> src-task -> val}
+        """
+        exs = self.id_lookup(ex_ids, level)
+
+        ex_id_to_annotation_vals = {}
+        for ex_id, ex in exs.items():
+            ex_id_to_annotation_vals[ex_id] = {f"{src}-{task_name}": ex.get_attr(src, task_name) for src, task_name in annotation_keys}
+
+        return ex_id_to_annotation_vals
+
+
+    def find_conversations_by_metadata(
+        self,
+        annotation_key: typing.Tuple[str, typing.Optional[str]], 
+        level: str = "conversation",
+        search_list: typing.List[str] = None,
+    ):
+        """Find conversations with metadata values in search_list.
+        
+        Returns: 
+            List of conversation IDs (or conversation-turn IDs for messages)
+        """
+        matches = []
+        if level == "conversation":
+            for conv in self.data:
+                val = conv.get_attr(annotation_key[0], annotation_key[1])
+                if (val in search_list) or (not search_list and not val):
+                    matches.appen(conv.conversation_id)
+        else:
+            for conv in self.data:
+                for idx, message in enumerate(conv.conversation):
+                    val = message.get_attr(annotation_key[0], annotation_key[1])
+                    if (val in search_list) or (not search_list and not val):
+                        matches.append(f"{conv.conversation_id}-{idx}")
+        return matches
+
+
+    def find_conflicting_annotations(
+        self,
+        annotation_keys: typing.List[typing.Tuple[str, typing.Optional[str]]], 
+        level: str = "conversation",
+    ):
+        """Finds all annotations for N sources that are conflicting.
+        
+        Returns:
+            List of conversation IDs (or conversation-turn IDs for messages)
+        """
+        conflict_ids = []
+        if level == "conversation":
+            for conv in self.data:
+                vals = [conv.get_attr(src, task_name) for (src, task_name) in annotation_keys]
+                if not all(item == vals[0] for item in vals):
+                    conflict_ids.append(conv.conversation_id)
+        else:
+            for conv in self.data:
+                for idx, message in enumerate(conv.conversation):
+                    vals = [conv.get_attr(src, task_name) for (src, task_name) in annotation_keys]
+                    if not all(item == vals[0] for item in vals):
+                        conflict_ids.append(f"{conv.conversation_id}-{idx}")
+        return conflict_ids
+
 
     def add_annotations(
         self,
@@ -95,7 +156,7 @@ class Dataset(object):
         """Update the dataset `metadata` fields in conversation or messages directly.
         This is used to maintain any type of metadata alongside the dataset.
         """
-        # Validation
+        # print(annotation_set.name)
         assert annotation_set.dataset_id == self.dataset_id
         annotation_conv_ids = [x.target_id.split("-")[0] for x in annotation_set.annotations]
         dset_conv_ids = [cc.conversation_id for cc in self.data]
@@ -116,40 +177,41 @@ class Dataset(object):
         if annotation_set.level == "conversation":
             for annotation in annotation_set.annotations:
                 self.data[conv_id_to_idx[annotation.target_id]].metadata.update({
-                    f"{annotation_set.source}-{annotation_set.level}-{annotation_set.name}": {
-                        "value": annotation.value,
-                        "confidence": annotation.confidence
-                    }
-                    })
+                    f"{annotation_set.source}-{annotation_set.name}": annotation})
         # or add to messages
-        # elif annotation_set.level == "message":
-        #     for annotation in annotation_set.annotations:
-        #         conv_id, turn_id = annotation.target_id.split("-")
-        #         self.data[conv_id_to_idx[conv_id]].conversation[int(turn_id)].metadata.update({
-        #             f"{annotation_set.source}-{annotation_set.name}": annotation})
-        elif annotation_set.level in {"message", "prompt", "response", "turn"}:
+        elif annotation_set.level == "message":
             for annotation in annotation_set.annotations:
                 conv_id, turn_id = annotation.target_id.split("-")
-                if conv_id not in conv_id_to_idx:
-                    if verbose:
-                        print(f"[WARN] conversation_id '{conv_id}' not found in dataset.")
+                # TODO: remove this check once annotation bug is fixed.
+                if int(turn_id) >= len(self.data[conv_id_to_idx[conv_id]].conversation):
+                    # print(conv_id, turn_id)
                     continue
+                self.data[conv_id_to_idx[conv_id]].conversation[int(turn_id)].metadata.update({
+                    f"{annotation_set.source}-{annotation_set.name}": annotation})
 
-                conv_idx = conv_id_to_idx[conv_id]
-                conversation = self.data[conv_idx].conversation
-                turn_idx = int(turn_id)
+        # elif annotation_set.level in {"message", "prompt", "response", "turn"}:
+        #     for annotation in annotation_set.annotations:
+        #         conv_id, turn_id = annotation.target_id.split("-")
+        #         if conv_id not in conv_id_to_idx:
+        #             if verbose:
+        #                 print(f"[WARN] conversation_id '{conv_id}' not found in dataset.")
+        #             continue
 
-                if turn_idx >= len(conversation):
-                    if verbose:
-                        print(f"[WARN] turn index {turn_idx} out of bounds for conversation '{conv_id}' with {len(conversation)} turns.")
-                    continue
+        #         conv_idx = conv_id_to_idx[conv_id]
+        #         conversation = self.data[conv_idx].conversation
+        #         turn_idx = int(turn_id)
 
-                conversation[turn_idx].metadata.update({
-                    f"{annotation_set.source}-{annotation_set.level}-{annotation_set.name}": {
-                        "value": annotation.value,
-                        "confidence": annotation.confidence
-                    }
-                })
+        #         if turn_idx >= len(conversation):
+        #             if verbose:
+        #                 print(f"[WARN] turn index {turn_idx} out of bounds for conversation '{conv_id}' with {len(conversation)} turns.")
+        #             continue
+
+        #         conversation[turn_idx].metadata.update({
+        #             f"{annotation_set.source}-{annotation_set.level}-{annotation_set.name}": {
+        #                 "value": annotation.value,
+        #                 "confidence": annotation.confidence
+        #             }
+        #         })
         else:
             raise Exception
         
@@ -166,7 +228,7 @@ class Dataset(object):
 
         Args:
             name: Name of the annotation feature to analyze (e.g., 'media_format')
-            level: The level (e.g., 'message', 'prompt', 'response')
+            level: The level (e.g., 'conversation' or 'message')
             annotation_source: The source used during annotation (e.g., 'automatic_v0')
             bin_size: The bin size for grouping confidence values (default: 0.1)
 
@@ -181,9 +243,9 @@ class Dataset(object):
 
         for conv in self.data:
             for msg in conv.conversation:
-                meta_key = f"{annotation_source}-{level}-{name}"
+                meta_key = f"{annotation_source}-{name}"
                 if meta_key in msg.metadata:
-                    confidence = msg.metadata[meta_key].get("confidence", None)
+                    confidence = msg.metadata[meta_key].confidence
                     if confidence is None:
                         continue
 
@@ -202,7 +264,7 @@ class Dataset(object):
     def get_annotation_distribution(
         self, 
         name: str,
-        level: str,
+        level: str = "conversation",
         annotation_source: typing.Optional[str] = None,
         annotation_as_list_type: bool = False,
     ) -> typing.Dict[str, int]:
@@ -234,21 +296,29 @@ class Dataset(object):
                 distribution[value] = distribution.get(value, 0) + 1
             return distribution
 
-        if annotation_source is None:
+        # Check if we're looking for a built-in attribute (like 'model')
+        if level == "conversation" and annotation_source is None:
             assert hasattr(self.data[0], name), f"Every conversation should have {name} attribute."
             for conv in self.data:
-                value = getattr(conv, name, None)
-                if value is not None:
+                value = getattr(conv, name)
+                distribution = update_value(distribution, value)
+        elif level == "message"  and annotation_source is None:
+            assert hasattr(self.data[0].conversation[0], name), f"Every message should have {name} attribute."
+            for conv in self.data:
+                for message in conv.conversation:
+                    value = getattr(message, name)
+                    distribution = update_value(distribution, value)
+        elif level == "conversation":
+            for conv in self.data:
+                if f"{annotation_source}-{name}" in conv.metadata:
+                    value = conv.metadata[f"{annotation_source}-{name}"].value
                     distribution = update_value(distribution, value)
         else:
             for conv in self.data:
                 for msg in conv.conversation:
-                    meta_key = f"{annotation_source}-{level}-{name}"
-                    if meta_key in msg.metadata:
-                        meta_info = msg.metadata[meta_key]
-                        value = meta_info.get("value", None)
-                        if value is not None:
-                            distribution = update_value(distribution, value)
+                    if f"{annotation_source}-{name}" in msg.metadata:
+                        value = msg.metadata[f"{annotation_source}-{name}"].value
+                        distribution = update_value(distribution, value)
 
         return distribution        
 
@@ -381,7 +451,7 @@ class Dataset(object):
                         value_exists2 += exists2
 
             if verbose:
-                print(f"Found {value_exists1} items with `{source1}-{level}-{name1}`, and {value_exists2} with `{source2}-{level}-{name2}`.")
+                print(f"Found {value_exists1} items with `{source1}-{name1}`, and {value_exists2} with `{source2}-{name2}`.")
                 print(f"Generated {len(annotation_pairs)} label-level pairs (at level={level}) out of {total_items} total items.")
             return annotation_pairs, combination_pairs
 

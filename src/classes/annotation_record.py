@@ -8,8 +8,8 @@ class AnnotationRecord(object):
     def __init__(
         self,
         value,
-        confidence,
         target_id: str, # conversation_id or conversation_id-turn_id
+        confidence: float = None,
         annotator: str=None,
     ):
         self.value = value

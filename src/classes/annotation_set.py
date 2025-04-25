@@ -86,8 +86,12 @@ class AnnotationSet(object):
         """Alternative constructor that initializes from automatic annotation file(s)."""
         annotations = automatic_annotation_parser.parse_automatic_annotations(path, verbose=True)
 
-        level_id = annotations[0]["level_id"]
-        prompt_id = annotations[0]["prompt_id"]
+        # TODO: Read these automatically from the files, once they are fixed.
+        level_id = "message"
+        prompt_id = os.path.basename(path).split(".")[0]
+        # level_id = annotations[0]["level_id"]
+        # prompt_id = annotations[0]["prompt_id"]
+    
         dataset_id = dataset_id_override or annotations[0]["dataset_id"] 
 
         return cls(
