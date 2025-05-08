@@ -8,13 +8,131 @@ sys.path.append("./")
 
 from src.helpers.io import read_jsonl, write_json, listdir_nohidden
 from src.classes.dataset import Dataset
-from src.classes.label_studio import load_labelstudio, split_labelstudio_files_by_conversation_id
+from src.classes.label_studio import load_labelstudio, load_labelstudio_v2, split_labelstudio_files_by_conversation_id, split_labelstudio_files_by_conversation_id_v2
 from src.classes.annotation_set import AnnotationSet
 from src.helpers.visualisation import tabulate_annotation_pair_summary, barplot_distribution, plot_confusion_matrix
 
 
 
+def add_conversation_ids_to_label_studio_files_v2(
+    label_studio_folder: str, 
+    conversations_file_path: str, 
+    output_folder: str = None
+):
+    """
+    Add conversation_id to Label Studio JSON files by matching text content from a conversations file.
+    Works with the new format where each record has a conversation array inside the data property.
+    
+    Args:
+        label_studio_folder: Path to folder containing Label Studio JSON files
+        conversations_file_path: Path to the file containing conversations with IDs
+        output_folder: Path to save the modified files (if None, will modify in place)
+        
+    Returns:
+        None (files are modified in place or saved to output_folder)
+    """
+    # Create a dictionary for fast text lookup
+    text_to_conversation_id = {}
+    
+    # Load conversations file
+    print(f"Loading conversations from {conversations_file_path}")
+    with open(conversations_file_path, 'r', encoding='utf-8') as f:
+        conversation_data = json.load(f)["data"]
+        for conversation_datum in conversation_data:
+            conversation_id = conversation_datum.get('conversation_id')
+            
+            # Skip if no conversation_id is found
+            if not conversation_id:
+                continue
+            
+            # Add each turn's text to the lookup dictionary
+            conv_text = ""
+            for turn in conversation_datum.get('conversation', []):
+                # In the conversations file, content is under 'content'
+                conv_text += turn.get('content', '')
 
+            if conv_text in text_to_conversation_id:
+                print(f"Warning: Duplicate text found for conversation ID: {conversation_id}")
+            if conv_text:
+                # Use the text as key to find the conversation_id later
+                text_to_conversation_id[conv_text] = conversation_id
+    
+    print(f"Loaded {len(text_to_conversation_id)} conversations.")
+    
+    # If output_folder is provided but doesn't exist, create it
+    if output_folder and not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+    
+    # Process each Label Studio file
+    file_count = 0
+    
+    # Process a single file directly if it ends with .json
+    if label_studio_folder.endswith('.json'):
+        files_to_process = [label_studio_folder]
+        label_studio_folder = os.path.dirname(label_studio_folder)
+    else:
+        files_to_process = [os.path.join(label_studio_folder, filename) 
+                           for filename in os.listdir(label_studio_folder) 
+                           if filename.endswith('.json')]
+    
+    for file_path in files_to_process:
+        filename = os.path.basename(file_path)
+        
+        # try:
+        # Load JSON file
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        modified = False
+        
+        # New format: data is a list of records
+        for record in data:
+            # Get conversation from the data property
+            conversation_obj = record.get('data', {})
+            
+            # Check different places where conversation might be stored
+            conversation_turns = conversation_obj.get('conversation', [])
+            turn1_dialogue = conversation_obj.get('turn1_dialogue', [])
+            
+            # Reconstruct the complete conversation text to match with our dictionary
+            conv_text = ""
+            for turn in conversation_turns:
+                conv_text += turn.get('content', '')
+            
+            # If conv_text is empty, try with turn1_dialogue
+            if not conv_text and turn1_dialogue:
+                for turn in turn1_dialogue:
+                    conv_text += turn.get('text', '')
+            
+            # Try to find a matching conversation_id
+            conversation_id = text_to_conversation_id.get(conv_text)
+            
+            if conversation_id:
+                # Set the conversation_id in the record
+                record['id'] = f"conv_{conversation_id.split('_')[-1]}" if conversation_id.startswith('conv_') else conversation_id
+                conversation_obj['conversation_id'] = conversation_id
+                
+                # Also update the conversation_id in each turn
+                for turn in conversation_turns:
+                    turn['conversation_id'] = conversation_id
+                
+                for turn in turn1_dialogue:
+                    turn['conversation_id'] = conversation_id
+                
+                modified = True
+        
+        # Save the modified file
+        if modified:
+            output_path = os.path.join(output_folder, filename) if output_folder else file_path
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            file_count += 1
+            print(f"Updated file: {filename}")
+                
+        # except Exception as e:
+        #     print(f"Error processing file {filename}: {e}")
+    
+    print(f"Added conversation IDs to {file_count} files")
 
 def add_conversation_ids_to_label_studio_files(
     label_studio_folder: str, 
@@ -118,16 +236,16 @@ def run_automatic_analysis_v0(dirpath):
     # dataset = Dataset.load('data/sample120.json')
 
     automatic_variants = [
-        "gpt4o-json-full",
-        "gpt4o-free-full",
-        "gpto3mini-json-full",
-        "gpto3mini-free-full",
+        "gpt4o-json",
+        "gpt4o-free",
+        "gpto3mini-json",
+        "gpto3mini-free",
     ]
 
     # Load automatic annotations
     for variant in automatic_variants:
         print("\n" + variant + "\n")
-        for fpath in listdir_nohidden(os.path.join(dirpath, f"automatic_annotations_v0/{variant}")):
+        for fpath in listdir_nohidden(os.path.join(dirpath, f"automatic_annotations_v1/{variant}")):
             if "prompt_topic" in fpath:
                 continue
             annotation_set = AnnotationSet.load_automatic(path=fpath, source=variant.replace("-", "_"), dataset_id_override="sample120")
@@ -137,31 +255,31 @@ def run_automatic_analysis_v0(dirpath):
 
 
 def run_test_cedric(dirpath):
-    dataset = Dataset.load(os.path.join(dirpath, "sample120.json")) 
+    dataset = Dataset.load(os.path.join(dirpath, "sample120.json"), "sample120") 
 
     # TODO: This adds conversation IDs to LabelStudio data and saves it to `data/labelstudio_outputs_wcids/`
     # Remove this when we have them in the LS outputs by default.
-    add_conversation_ids_to_label_studio_files(
-        os.path.join(dirpath, "labelstudio_outputs/"),
+    add_conversation_ids_to_label_studio_files_v2(
+        os.path.join(dirpath, "labelstudio_outputs_v2/"),
         os.path.join(dirpath, 'sample120.json'),
-        os.path.join(dirpath, "labelstudio_outputs_wcids/"),
+        os.path.join(dirpath, "labelstudio_outputs_wcids_v2/"),
     )
 
     # split annotations into two folders without any duplicate conversation IDs in each file.
-    split_labelstudio_files_by_conversation_id(
-        input_folder=os.path.join(dirpath, "labelstudio_outputs_wcids/"),
-        output_folder1=os.path.join(dirpath, "labelstudio_outputs_split1/"),
-        output_folder2=os.path.join(dirpath, "labelstudio_outputs_split2/"),
+    split_labelstudio_files_by_conversation_id_v2(
+        input_folder=os.path.join(dirpath, "labelstudio_outputs_wcids_v2/"),
+        output_folder1=os.path.join(dirpath, "labelstudio_outputs_split1_v2/"),
+        output_folder2=os.path.join(dirpath, "labelstudio_outputs_split2_v2/"),
     )
 
-    annotation_sets1 = load_labelstudio(
-        os.path.join(dirpath, "labelstudio_outputs_split1"), 
+    annotation_sets1 = load_labelstudio_v2(
+        os.path.join(dirpath, "labelstudio_outputs_split1_v2"), 
         source="split1",
         dataset_id="sample120",
         level="message",
     )
-    annotation_sets2 = load_labelstudio(
-        os.path.join(dirpath, "labelstudio_outputs_split2"), 
+    annotation_sets2 = load_labelstudio_v2(
+        os.path.join(dirpath, "labelstudio_outputs_split2_v2"), 
         source="split2",
         dataset_id="sample120",
         level="message",

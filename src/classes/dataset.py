@@ -37,15 +37,16 @@ class Dataset(object):
         self.data: typing.List[Conversation] = data
         
     @classmethod
-    def load(cls, json_path: str):
+    def load(cls, json_path: str, datasetid_override: str = None):
         """Alternative constructor that initializes from a JSON file."""
         with open(json_path, 'r') as f:
             data = json.load(f)
         
         # Create a new instance with the remaining data
+        raw_data = data if isinstance(data, list) else data["data"]
         return cls(
-            dataset_id=data["dataset_id"],
-            data=[Conversation(**x) for x in data["data"]],
+            dataset_id=datasetid_override or data["dataset_id"],
+            data=[Conversation(**x) for x in raw_data],
         )
 
     def to_dict(self):
@@ -73,9 +74,9 @@ class Dataset(object):
 
     def id_lookup(self, ids, level="conversation"):
         if level == "conversation":
-            return [cc.to_dict() for cc in self.data if cc.conversation_id in ids]
+            return {cc.conversation_id: cc for cc in self.data if cc.conversation_id in ids}
         else:
-            return [m.to_dict() for cc in self.data for m in cc.conversation if f"{cc.conversation_id}-{m.turn}" in ids]
+            return {f"{cc.conversation_id}-{m.turn}": m for cc in self.data for m in cc.conversation if f"{cc.conversation_id}-{m.turn}" in ids}
     
 
     def extract_conversation_metadata_by_ids(
@@ -89,6 +90,7 @@ class Dataset(object):
             {ex_id -> src-task -> val}
         """
         exs = self.id_lookup(ex_ids, level)
+        print(len(exs))
 
         ex_id_to_annotation_vals = {}
         for ex_id, ex in exs.items():
