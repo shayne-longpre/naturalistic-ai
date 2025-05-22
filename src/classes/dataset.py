@@ -182,7 +182,12 @@ class Dataset(object):
                     f"{annotation_set.source}-{annotation_set.name}": annotation})
         # or add to messages
         elif annotation_set.level == "message":
+            # if annotation_set.source == "split1":
+            #     print("****** NASDHJHSDFLSDFH")
+            #     print(annotation_set.annotations[0].target_id)
             for annotation in annotation_set.annotations:
+                # if target_id == "wildchat_20847df802a3268754fe7d7a6ada334b-3":
+                #     print()
                 conv_id, turn_id = annotation.target_id.split("-")
                 # TODO: remove this check once annotation bug is fixed.
                 if int(turn_id) >= len(self.data[conv_id_to_idx[conv_id]].conversation):

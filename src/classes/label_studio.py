@@ -152,10 +152,11 @@ def load_labelstudio_v2(
                         # print(base_task_name)
                         continue
                     
+                    message_index = (2 * turn_index)
                     # For response fields, increment turn index
                     if "response" in base_task_name:
-                        turn_index += 1
-                    
+                        message_index += 1
+                        
                     # Store the choices
                     choices = result.get('value', {}).get('choices', [])
                     
@@ -164,7 +165,7 @@ def load_labelstudio_v2(
                         text_value = result.get('value', {}).get('text', [])
                         choices = text_value if isinstance(text_value, list) else [text_value]
                     
-                    results_by_turn[turn_index][base_task_name] = choices
+                    results_by_turn[message_index][base_task_name] = choices
                 
                 # Process each conversation turn with its annotations
                 for turn in conversations:
