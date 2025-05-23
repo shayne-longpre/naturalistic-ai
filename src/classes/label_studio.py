@@ -21,14 +21,16 @@ prompt_mappings = {
     'interaction_features': 'prompt_interaction_features',
     'function_purpose': 'prompt_function_purpose',
     'topic_turn': 'turn_topic',
-    'restricted_flags_prompt': 'turn_sensitive_use_flags'
+    'restricted_flags_prompt': 'turn_sensitive_use_flags',
+    "other_feedback_prompt": "other_feedback_prompt",
 }
 
 response_mappings = {
     'answer_form_response': 'response_answer_form',
     'media_format_response': 'response_media_format',
     'interaction_features_response': 'response_interaction_features',
-    'restricted_flags_response': 'turn_sensitive_use_flags'
+    'restricted_flags_response': 'turn_sensitive_use_flags',
+    "other_feedback_response": "other_feedback_response",
 }
 
 def get_base_task_name(from_name):
@@ -36,12 +38,12 @@ def get_base_task_name(from_name):
 
     # Check prompt mappings
     for old_prefix, new_prefix in prompt_mappings.items():
-        if from_name.startswith(old_prefix):
+        if from_name == old_prefix:
             return new_prefix
     
     # Check response mappings
     for old_prefix, new_prefix in response_mappings.items():
-        if from_name.startswith(old_prefix):
+        if from_name == old_prefix:
             return new_prefix
     
     # Handle special cases with "whole" or other patterns
@@ -51,6 +53,7 @@ def get_base_task_name(from_name):
         elif 'other_feedback_whole' in from_name:
             return 'other_feedback'
     
+    print(f"NOT FOUND: {from_name}")
     # If no mapping found, return the original without the number suffix
     # This is a fallback case
     return re.sub(r'_\d+$', '', from_name)
@@ -145,7 +148,8 @@ def load_labelstudio_v2(
                     from_names.add(from_name)
                     # Get base task name by removing turn suffix
                     # base_task_name = re.sub(r'_(prompt|response)_\d+$', '', from_name)
-                    base_task_name = get_base_task_name(from_name)
+                    parsed_from_name = "_".join(from_name.split("_")[:-1])
+                    base_task_name = get_base_task_name(parsed_from_name)
                     
                     # Skip fields not in our defined lists
                     if base_task_name not in acceptable_fields:
@@ -156,7 +160,7 @@ def load_labelstudio_v2(
                     # For response fields, increment turn index
                     if "response" in base_task_name:
                         message_index += 1
-                        
+
                     # Store the choices
                     choices = result.get('value', {}).get('choices', [])
                     

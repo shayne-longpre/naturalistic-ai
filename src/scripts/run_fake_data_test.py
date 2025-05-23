@@ -290,7 +290,6 @@ def run_test_cedric(dirpath):
     #     num_annotations = len(annotation_sets1[task_key].annotations) + len(annotation_sets2[task_key].annotations)
     #     print(f"Total annotations for {task_key}: {num_annotations}\n")
 
-    print("starttinginsdgljsdfjksdfjl")
     for task, annotation_set in annotation_sets1.items():
         dataset.add_annotations(annotation_set)
     for task, annotation_set in annotation_sets2.items():
