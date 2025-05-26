@@ -1,10 +1,8 @@
 import os
 import sys
 import asyncio
-import string
 import argparse
 import pandas as pd
-from collections import defaultdict
 
 # Preliminaries
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -35,17 +33,17 @@ Only use information present or inferable from the input. Avoid hallucinations o
         if include_prev_turn else ""
     )
 
-    prompt = f"""{PREAMBLE}
-
-Task description: {task_description}
-Options: {options}
-
-<START_CONVERSATION>
+    prompt = f"""<START_CONVERSATION>
 {previous_turn_block}<START_CURRENT_TURN>
 {{curr_text}}
 <END_CURRENT_TURN>
 
 <END_CONVERSATION>
+
+{PREAMBLE}
+
+Task description: {task_description}
+Options: {options}
 
 {JSON_INSTRUCTION}
 Response: """
@@ -177,7 +175,6 @@ def extract_samples_and_metadata(args, dataframe, existing_pairs):
             turn_ids.append(turn_id)
 
     return sample, metadata, order_ids, turn_ids
-
 
 
 

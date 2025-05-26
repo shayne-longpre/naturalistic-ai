@@ -1,10 +1,8 @@
 import os
 import sys
 import asyncio
-import string
 import argparse
 import pandas as pd
-from collections import defaultdict
 
 # Preliminaries
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -21,7 +19,7 @@ def make_prompt(args, include_prev_turn=True):
 1. Comprehensive: You will list all relevant annotations as the tasks can be multi-class (only one label is true) or multi-label (multiple categories can be true at once). Pay special attention to subtle, or implied properties of the input conversation. 
 2. Precise: You must answer as a JSON list of dictionaries of exact labels name(s) and confidence (a score between 0 and 1) without any additional explanation, reasoning, or text.
 3. Calibrated: Reflect appropriate confidence in your annotation. If the input is ambiguous or open to multiple interpretations, acknowledge that explicitly.
-The conversation log is enclosed between <START_CONVERSATION> and <END_CONVERSATION> tags. The previous turn is included as JSON between <START_PREVIOUS_TURN> and <END_PREVIOUS_TURN> when available; if not present, the current turn is the first part of the conversation. The current turn is always enclosed between <START_CURRENT_TURN> and <END_CURRENT_TURN>.
+The conversation log is enclosed between <START_CONVERSATION> and <END_CONVERSATION> tags. When available, one or more previous conversation turns are included as JSON between <START_PREVIOUS_TURN> and <END_PREVIOUS_TURN> to provide context, unless the current turn is the first in the conversation. Multiple previous conversation turns may be included if their combined length is not too long. The current turn is always enclosed between <START_CURRENT_TURN> and <END_CURRENT_TURN>.
 While the previous conversation turn may be provided for context, generate an annotation only for the current {args.level_id}. 
 Only use information present or inferable from the input. Avoid hallucinations or unjustified assumptions."""
 
@@ -52,29 +50,45 @@ Response: """
     return prompt
 
 
-def format_conversation_turns_free(conversation, args):
+def format_conversation_turns_free(conversation, args, max_prev_chars=300):
     pairs = []
     turn_ids = []
     for i in range(0, len(conversation) - 1, 2):
         user_turn = conversation[i]
         assistant_turn = conversation[i + 1] if i + 1 < len(conversation) else None
-        if user_turn["role"] == "user" or user_turn["role"] == "human" and assistant_turn and assistant_turn["role"] == "assistant" or assistant_turn["role"] == "gpt":
+        if user_turn["role"] in ["user", "human"] and assistant_turn and assistant_turn["role"] in ["assistant", "gpt"]:
             pairs.append((user_turn["content"], assistant_turn["content"]))
             turn_ids.append(user_turn["turn"])
 
     formatted_turns = []
     for i in range(len(pairs)):
-        # Previous turn
-        if i == 0:
-            prev_user = "None"
-            prev_assistant = "None"
-        else:
-            prev_user, prev_assistant = pairs[i - 1]
+        prev_text = "None"
+
+        # Collect previous 2 turns if available
+        if i >= 1:
+            prev_turns = []
+            for offset in [2, 1]:  # check 2-turn-back, then 1-turn-back
+                if i - offset >= 0:
+                    u, a = pairs[i - offset]
+                    prev_turns.append((u, a))
+
+            # Always include most recent previous turn
+            most_recent_u, most_recent_a = pairs[i - 1]
+            full_prev_text = f"Previous user prompt: {most_recent_u}\nPrevious model response: {most_recent_a}"
+
+            if len(prev_turns) == 2:
+                older_u, older_a = prev_turns[0]
+                older_text = f"Previous user prompt: {older_u}\nPrevious model response: {older_a}"
+                combined = older_text + "\n\n" + full_prev_text
+                if len(combined) <= max_prev_chars:
+                    prev_text = combined
+                else:
+                    prev_text = full_prev_text
+            else:
+                prev_text = full_prev_text
 
         # Current turn
         curr_user, curr_assistant = pairs[i]
-
-        prev_text = f"Previous user prompt: {prev_user}\nPrevious model response: {prev_assistant}"
         if args.level_id == "prompt":
             curr_text = f"Current user prompt: {curr_user}"
         else:
@@ -84,33 +98,53 @@ def format_conversation_turns_free(conversation, args):
     return formatted_turns
 
 
-def format_conversation_turns_json(conversation, args):
+
+def format_conversation_turns_json(conversation, args, max_prev_chars=300):
+    import json
     pairs = []
     turn_ids = []
     for i in range(0, len(conversation) - 1, 2):
         user_turn = conversation[i]
         assistant_turn = conversation[i + 1] if i + 1 < len(conversation) else None
-        if user_turn["role"] == "user" or user_turn["role"] == "human" and assistant_turn and assistant_turn["role"] == "assistant" or assistant_turn["role"] == "gpt":
+        if user_turn["role"] in ["user", "human"] and assistant_turn and assistant_turn["role"] in ["assistant", "gpt"]:
             pairs.append((user_turn["content"], assistant_turn["content"]))
             turn_ids.append(user_turn["turn"])
 
     formatted_turns = []
     for i in range(len(pairs)):
-        # Previous turn
-        if i == 0:
-            prev_user = "None"
-            prev_assistant = "None"
-        else:
-            prev_user, prev_assistant = pairs[i - 1]
+        prev_text = "None"
+
+        if i >= 1:
+            prev_turns = []
+            for offset in [2, 1]:
+                if i - offset >= 0:
+                    u, a = pairs[i - offset]
+                    prev_turns.append((u, a))
+
+            most_recent_u, most_recent_a = pairs[i - 1]
+            full_prev_obj = {
+                "Previous user prompt": most_recent_u,
+                "Previous model response": most_recent_a
+            }
+
+            if len(prev_turns) == 2:
+                older_u, older_a = prev_turns[0]
+                older_obj = {
+                    "Previous user prompt 1": older_u,
+                    "Previous model response 1": older_a,
+                    "Previous user prompt 2": most_recent_u,
+                    "Previous model response 2": most_recent_a
+                }
+                json_str = json.dumps(older_obj, ensure_ascii=False)
+                if len(json_str) <= max_prev_chars:
+                    prev_text = json.dumps(older_obj, ensure_ascii=False, indent=2)
+                else:
+                    prev_text = json.dumps(full_prev_obj, ensure_ascii=False, indent=2)
+            else:
+                prev_text = json.dumps(full_prev_obj, ensure_ascii=False, indent=2)
 
         # Current turn
         curr_user, curr_assistant = pairs[i]
-
-        prev_text = json.dumps({
-            "Previous user prompt": prev_user,
-            "Previous model response": prev_assistant
-        }, ensure_ascii=False, indent=2)
-
         if args.level_id == "prompt":
             curr_text = json.dumps({
                 "Current user prompt": curr_user
@@ -122,6 +156,7 @@ def format_conversation_turns_json(conversation, args):
             }, ensure_ascii=False, indent=2)
 
         formatted_turns.append((prev_text, curr_text, turn_ids[i]))
+
     return formatted_turns
 
 
@@ -177,7 +212,6 @@ def extract_samples_and_metadata(args, dataframe, existing_pairs):
             turn_ids.append(turn_id)
 
     return sample, metadata, order_ids, turn_ids
-
 
 
 
