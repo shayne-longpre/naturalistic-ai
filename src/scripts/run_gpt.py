@@ -13,6 +13,7 @@ from utils import *
 from src.helpers import gpt, io
 
 
+
 def make_prompt(args, include_prev_turn=True):
     TASK_DESCRIPTION = io.read_json("src/scripts/instructions.json")
     OPTIONS = io.read_json("src/scripts/taxonomy_options.json")
@@ -52,6 +53,7 @@ Response: """
     return prompt
 
 
+
 def format_conversation_turns_free(conversation, args):
     pairs = []
     turn_ids = []
@@ -82,6 +84,7 @@ def format_conversation_turns_free(conversation, args):
 
         formatted_turns.append((prev_text, curr_text, turn_ids[i]))
     return formatted_turns
+
 
 
 def format_conversation_turns_json(conversation, args):
@@ -180,7 +183,6 @@ def extract_samples_and_metadata(args, dataframe, existing_pairs):
 
 
 
-
 async def run_gpt(args, batch_size=1):
     existing_ex_ids = load_existing_exid_turn_pairs(args.save)   
     dataframe = pd.read_json(args.input, orient="records")
@@ -238,6 +240,7 @@ async def run_gpt(args, batch_size=1):
 
             if batch_output:
                 append_jsonl(batch_output, args.save)
+
 
 
 if __name__ == "__main__":
