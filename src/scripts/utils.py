@@ -7,6 +7,10 @@ from helpers import io
 sys.path.append("./")
 
 
+def char_count(s):
+    return len(s)
+
+
 def read_json(json_file):
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)

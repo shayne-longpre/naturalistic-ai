@@ -1,17 +1,14 @@
 import os
 import sys
 import asyncio
-import string
 import argparse
 import pandas as pd
-from collections import defaultdict
 
 # Preliminaries
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from utils import *
 from src.helpers import gpt, io
-
 
 
 def make_prompt(args, include_prev_turn=True):
@@ -36,22 +33,21 @@ Only use information present or inferable from the input. Avoid hallucinations o
         if include_prev_turn else ""
     )
 
-    prompt = f"""{PREAMBLE}
-
-Task description: {task_description}
-Options: {options}
-
-<START_CONVERSATION>
+    prompt = f"""<START_CONVERSATION>
 {previous_turn_block}<START_CURRENT_TURN>
 {{curr_text}}
 <END_CURRENT_TURN>
 
 <END_CONVERSATION>
 
+{PREAMBLE}
+
+Task description: {task_description}
+Options: {options}
+
 {JSON_INSTRUCTION}
 Response: """
     return prompt
-
 
 
 def format_conversation_turns_free(conversation, args):
@@ -84,7 +80,6 @@ def format_conversation_turns_free(conversation, args):
 
         formatted_turns.append((prev_text, curr_text, turn_ids[i]))
     return formatted_turns
-
 
 
 def format_conversation_turns_json(conversation, args):
@@ -240,7 +235,6 @@ async def run_gpt(args, batch_size=1):
 
             if batch_output:
                 append_jsonl(batch_output, args.save)
-
 
 
 if __name__ == "__main__":
