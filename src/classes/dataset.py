@@ -7,8 +7,11 @@ import os
 from torch.utils.data import DataLoader
 import pandas as pd 
 import itertools
+import numpy as np
 from collections import defaultdict, Counter
-from sklearn.metrics import cohen_kappa_score, confusion_matrix
+from sklearn.metrics import cohen_kappa_score, f1_score, jaccard_score, confusion_matrix
+from nltk.metrics import AnnotationTask, masi_distance
+from statsmodels.stats.inter_rater import fleiss_kappa
 
 sys.path.append("./")
 
@@ -114,13 +117,13 @@ class Dataset(object):
         if level == "conversation":
             for conv in self.data:
                 val = conv.get_attr(annotation_key[0], annotation_key[1])
-                if (val in search_list) or (not search_list and not val):
+                if (not search_list and not val) or (val in search_list):
                     matches.appen(conv.conversation_id)
         else:
             for conv in self.data:
                 for idx, message in enumerate(conv.conversation):
                     val = message.get_attr(annotation_key[0], annotation_key[1])
-                    if (val in search_list) or (not search_list and not val):
+                    if (not search_list and not val) or (val in search_list): 
                         matches.append(f"{conv.conversation_id}-{idx}")
         return matches
 
@@ -148,6 +151,33 @@ class Dataset(object):
                     if not all(item == vals[0] for item in vals):
                         conflict_ids.append(f"{conv.conversation_id}-{idx}")
         return conflict_ids
+
+
+    def extract_all_metadata_values_for_annotation_source_name(
+        self,
+        annotation_keys: typing.List[typing.Tuple[str, typing.Optional[str]]], 
+        level: str = "conversation",
+    ):
+        """For a given annotation set, we extract all observed values."""
+        if level == "conversation":
+            ex_ids = [cc.conversation_id for cc in self.data]
+        else:
+            ex_ids = [f"{cc.conversation_id}-{idx}" for cc in self.data for idx, _ in enumerate(cc.conversation)]
+
+        # Ex_id --> src-task --> value
+        ex_id_to_annotation_vals = self.extract_conversation_metadata_by_ids(
+            ex_ids,
+            annotation_keys=annotation_keys, 
+            level=level,
+        )
+        all_values = [
+            val for src_task_to_value in ex_id_to_annotation_vals.values() 
+            for vals in src_task_to_value.values() if vals is not None
+            for val in vals
+        ]
+        # return Counter(all_values)
+        return set(all_values)
+
 
 
     def add_annotations(
@@ -182,13 +212,7 @@ class Dataset(object):
                     f"{annotation_set.source}-{annotation_set.name}": annotation})
         # or add to messages
         elif annotation_set.level == "message":
-            # if annotation_set.source == "split1":
-            #     print("****** NASDHJHSDFLSDFH")
-            #     print(annotation_set.annotations[0].target_id)
             for annotation in annotation_set.annotations:
-                # if annotation.target_id == "wildchat_40fe9070a5268327e0278d00a7bd1396-2" and annotation_set.source == "split1":
-                #     print(annotation)
-                #     print(annotation_set.name)
                 conv_id, turn_id = annotation.target_id.split("-")
                 # TODO: remove this check once annotation bug is fixed.
                 if int(turn_id) >= len(self.data[conv_id_to_idx[conv_id]].conversation):
@@ -392,25 +416,62 @@ class Dataset(object):
                 
             return matrix
 
+
         def _compute_annotator_disagreement(annotation_pairs):
             """
-            Compute agreement metrics for the annotation pairs.
+            Compute agreement metrics for the annotation pairs including Cohen's kappa,
+            Krippendorff's alpha, Jaccard similarity, F1-score, and Fleiss' kappa.
             """
             if not annotation_pairs:
                 return {"error": "No paired values found"}
-                
+
             metrics = {}
             _, labels1, labels2 = zip(*annotation_pairs)
+
+            # Exact agreement rate
             metrics["label_agreement_rate"] = sum(l1 == l2 for _, l1, l2 in annotation_pairs) / len(annotation_pairs)
-            
+
+            # Cohen's kappa
             try:
                 metrics["cohens_kappa"] = cohen_kappa_score([str(x) for x in labels1], [str(x) for x in labels2])
             except Exception as e:
                 metrics["cohens_kappa_error"] = str(e)
+
+            # Krippendorff's alpha with MASI distance
+            task_data = []
+            for idx, (l1, l2) in enumerate(zip(labels1, labels2)):
+                task_data.append(('coder1', f'Item{idx}', frozenset(l1)))
+                task_data.append(('coder2', f'Item{idx}', frozenset(l2)))
+
+            task = AnnotationTask(distance=masi_distance)
+            task.load_array(task_data)
+
+            try:
+                metrics["krippendorffs_alpha"] = task.alpha()
+            except Exception as e:
+                metrics["krippendorffs_alpha_error"] = str(e)
+
+            # Jaccard similarity and F1-score
+            try:
+                unique_labels = list(set().union(*labels1, *labels2))
+                binarized_labels1 = [[1 if label in labels else 0 for label in unique_labels] for labels in labels1]
+                binarized_labels2 = [[1 if label in labels else 0 for label in unique_labels] for labels in labels2]
+
+                metrics["jaccard_similarity"] = jaccard_score(binarized_labels1, binarized_labels2, average='samples')
+                metrics["f1_score"] = f1_score(binarized_labels1, binarized_labels2, average='samples')
+            except Exception as e:
+                metrics["jaccard_f1_error"] = str(e)
+
             return metrics
 
         
         def _get_annotation_pairs():
+            """
+
+            Return:
+                annotation_pairs: ( obj_id, label(s)1, label(s)2 )
+                combination_pairs: ( obj_id, label1, label2 ) for every pairwise combination of labels1, labels2.
+            """
             # Get all annotation pairs
             combination_pairs, annotation_pairs = [], []
             total_items, value_exists1, value_exists2 = 0, 0, 0
@@ -430,6 +491,8 @@ class Dataset(object):
                         sorted(val1) if isinstance(val1, list) else val1, 
                         sorted(val2) if isinstance(val2, list) else val2,
                     )
+                # if obj_id == "wildchat_40fe9070a5268327e0278d00a7bd1396-2":
+                #     print(local_annotation_pair)
 
                 return local_annotation_pair, local_combination_pair, int(val1 is not None), (val2 is not None)
 

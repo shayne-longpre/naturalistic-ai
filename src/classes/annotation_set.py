@@ -106,7 +106,7 @@ class AnnotationSet(object):
                 AnnotationRecord(
                     value=x["parsed_response"],
                     confidence=x["parsed_confidence"],
-                    target_id=x.get("conversation_id", x.get("ex_id")) + "-" + str(x["turn"]),
+                    target_id=x.get("conversation_id", x.get("ex_id")) + "-" + str(x["turn"] + 1) if "response" in prompt_id else x.get("conversation_id", x.get("ex_id")) + "-" + str(x["turn"]),
                     annotator=x.get("model"),
                 ) 
                 for x in annotations],
