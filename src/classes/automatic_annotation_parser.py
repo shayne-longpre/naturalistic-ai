@@ -6,21 +6,30 @@ from collections import defaultdict
 from typing import List, Dict, Tuple, Any, Optional
 from src.helpers import io
 
-sys.path.append("./")
+sys.path.append("../")
+
+from src.helpers import constants
 
 
 # Helper Functions
+def clean_annotation_label(txt):
+    for punct in ".,!?':;/()-_&":
+        txt = txt.replace(punct, " ")
+    return " ".join(txt.lower().strip().split())
+
 
 def extract_options(options_dict: Dict[str, Dict[str, str]], level_key: str, prompt_key: str) -> List[str]:
     """Extract labels from a predefined options dictionary."""
-    # print(options_dict.keys())
-    if level_key not in options_dict or prompt_key not in options_dict[level_key]:
-        return []
-        # raise ValueError(f"Invalid keys: {level_key}:{prompt_key} not found.")
+    return constants.ANNOTATION_TAXONOMY_REVERSE_REMAPPER[f"{level_key}_{prompt_key}"].keys()
 
-    raw = options_dict[level_key][prompt_key]
-    return [line.strip()[2:].split(':', 1)[0].strip()
-            for line in raw.strip().splitlines() if line.strip().startswith('- ')]
+    # print(options_dict.keys())
+    # if level_key not in options_dict or prompt_key not in options_dict[level_key]:
+    #     return []
+    #     # raise ValueError(f"Invalid keys: {level_key}:{prompt_key} not found.")
+
+    # raw = options_dict[level_key][prompt_key]
+    # return [line.strip()[2:].split(':', 1)[0].strip()
+    #         for line in raw.strip().splitlines() if line.strip().startswith('- ')]
 
 
 def extract_json(response_str: str) -> Optional[List[Dict[str, Any]]]:
@@ -33,61 +42,90 @@ def extract_json(response_str: str) -> Optional[List[Dict[str, Any]]]:
         return None
 
 
-def label_in_options_exact(label: str, options: List[str]) -> bool:
-    """Check if a label is valid based on provided options."""
-    def normalize_label(label: str) -> str:
-        """Normalize labels by removing extra spaces and hyphens."""
-        return label.replace('- ', '-').strip()
-
-    norm_label = normalize_label(label)
-    return any(norm_label == normalize_label(opt) for opt in options)
-
-
 def label_in_options_partial(label: str, options: List[str]) -> bool:
     """Check if a label is partially matched based on provided options."""
-    def normalize_label(label: str) -> str:
-        return label.replace('- ', '-').strip()
-
-    norm_label = normalize_label(label)
-    return any(
-        norm_label == normalize_label(opt) or norm_label in normalize_label(opt)
+    norm_label = clean_annotation_label(label)
+    matches = [
+        norm_label == clean_annotation_label(opt) or norm_label in clean_annotation_label(opt)
         for opt in options
-    )
+    ]
+    # if not any(matches):
+    #     print(label)
+    return any(matches)
+
+# OLD VERSION:
+# def label_in_options_exact(label: str, options: List[str]) -> bool:
+#     """Check if a label is valid based on provided options."""
+#     def normalize_label(label: str) -> str:
+#         """Normalize labels by removing extra spaces and hyphens."""
+#         return label.replace('- ', '-').strip()
+
+#     norm_label = normalize_label(label)
+#     return any(norm_label == normalize_label(opt) for opt in options)
+
+# OLD VERSION:
+# def label_in_options_partial(label: str, options: List[str]) -> bool:
+#     """Check if a label is partially matched based on provided options."""
+#     def normalize_label(label: str) -> str:
+#         return label.replace('- ', '-').strip()
+
+#     norm_label = normalize_label(label)
+#     return any(
+#         norm_label == normalize_label(opt) or norm_label in normalize_label(opt)
+#         for opt in options
+#     )
 
 # Core Validation Function
 
 def validate_entry(
     entry: Dict[str, Any], 
-    options: List[str]
+    options: List[str],
+    default_to_none: bool = False,
 ) -> Tuple[bool, str, Optional[List[Dict[str, Any]]]]:
-    """Validate an entry against options and extract JSON data if valid."""
+    """Validate an entry against options and extract JSON data if valid.
+    
+    Summary: Right now this function just checks dictionary is well formed, and that labels, when normalized, 
+    match something from "../src/scripts/taxonomy_options.json".
+
+    TODO: After, we should remap all labels so they look like ones from Cedric.
+    """
+
     response_data = extract_json(entry.get('response', ''))
     if not isinstance(response_data, list):
-        return False, 'Invalid JSON list', None
+        return 'Invalid JSON list', None
+
+    if response_data == []:
+        if default_to_none:
+            return "Valid", [{"labels": "None", "confidence": 1.0}]
+        else:
+            return "Returned empty response", []
 
     for item in response_data:
         if not isinstance(item, dict):
-            return False, 'Item not a dictionary', None
+            return 'Item not a dictionary', response_data
         if 'labels' not in item or 'confidence' not in item:
-            return False, 'Missing keys', None
+            return 'Missing keys', response_data
         if not isinstance(item['confidence'], (int, float)) or not (0 <= item['confidence'] <= 1):
-            return False, 'Confidence out of range', None
+            return 'Confidence out of range', response_data
 
         labels = item['labels']
+        # if isinstance(labels, list) and labels[0] == None:
+        #     print('zero')
         labels = labels if isinstance(labels, list) else [labels]
 
         if not all(label_in_options_partial(label, options) for label in labels):
-            return False, 'Invalid option', None
+            return 'Invalid option', response_data
 
-    return True, 'Valid', response_data
+    return 'Valid', response_data
 
 
 def parse_automatic_annotations(
-    path, 
+    fpath, 
     conf_threshold: int=0.3,
     verbose: bool=False
 ):
-    raw_entries = io.read_jsonl(path)
+    # print(fpath)
+    raw_entries = io.read_jsonl(fpath)
     if not raw_entries:
         return []
 
@@ -98,11 +136,16 @@ def parse_automatic_annotations(
     if not task_options:
         return []
 
+    default_to_none = prompt_id in ("sensitive_use_flags", "interaction_features", "topic")
+    # print(f"{prompt_id}: {default_to_none}")
+
     valid_entries, invalid_reasons = [], defaultdict(lambda: 0)
     for entry in raw_entries:
-        is_valid, reason, response_data = validate_entry(entry, task_options)
-        if not is_valid:
-            invalid_reasons[reason] += 1
+
+
+        is_invalid_reason, response_data = validate_entry(entry, task_options, default_to_none=default_to_none)
+        if is_invalid_reason != "Valid":
+            invalid_reasons[is_invalid_reason] += 1
             continue
 
         valid_labels = []
@@ -110,13 +153,34 @@ def parse_automatic_annotations(
         for item in response_data:
             if item.get("confidence", 1.0) >= conf_threshold:
                 labels = item['labels'] if isinstance(item['labels'], list) else [item['labels']]
+                clean_labels = [clean_annotation_label(label) for label in labels]
+                label_to_canonical_label = constants.ANNOTATION_TAXONOMY_REVERSE_REMAPPER[f"{level_id}_{prompt_id}"]
+                clean_labels = [label_to_canonical_label[label] for label in clean_labels]
+
                 confidences = item['confidence'] if isinstance(item['confidence'], list) else [item['confidence']]
-                valid_labels.extend(labels)
+                valid_labels.extend(clean_labels)
                 valid_confidences.extend(confidences)
+
+        # if entry["ex_id"] == "sharegpt_3fTHHS8" and "gpt4o-free" in fpath and f"{level_id}_{prompt_id}" == "turn_sensitive_use_flags" and entry["turn"] == 12:
+            # print(entry)
+            # print(valid_labels)
+            # print(response_data)
 
         new_entry = copy.deepcopy(entry)
         new_entry.update({"parsed_response": valid_labels, "parsed_confidence": valid_confidences})
         valid_entries.append(new_entry)
+
+    # FOR TESTING WHAT ANNOTATIONS DO NOT MAP:
+    # ------------------------------------------------
+    # label_to_canonical_label = constants.ANNOTATION_TAXONOMY_REVERSE_REMAPPER[f"{level_id}_{prompt_id}"]
+    # unmapped = set()
+    # for entry in valid_entries:
+    #     for label in entry["parsed_response"]:
+    #         if label not in label_to_canonical_label:
+    #             unmapped.add(label)
+    # print(prompt_id)
+    # print(unmapped)
+    # ------------------------------------------------
 
     if verbose:
         total_invalid = sum(invalid_reasons.values())
