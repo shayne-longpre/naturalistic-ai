@@ -13,10 +13,9 @@ from src.helpers import constants
 
 # Helper Functions
 def clean_annotation_label(txt):
-    label = txt.lower()
-    for punct in [":", "/", "(", ")", ",", ".", "-", "&", "'", ";"]:
-        label = label.replace(punct, " ")
-    return " ".join(label.strip().split())
+    for punct in ".,!?':;/()-_&":
+        txt = txt.replace(punct, " ")
+    return " ".join(txt.lower().strip().split())
 
 
 def extract_options(options_dict: Dict[str, Dict[str, str]], level_key: str, prompt_key: str) -> List[str]:

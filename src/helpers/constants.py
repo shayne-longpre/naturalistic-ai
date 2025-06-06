@@ -210,6 +210,7 @@ ANNOTATION_TAXONOMY_REMAPPER = {
         ],
         "Information Analysis: Content Quality Review Or Assessment": [
             "information analysis content quality review or assessment",
+            "information analysis ranking or scoring",
         ],
         "Information Analysis: Other Content Analysis / Description": [
             "information analysis other content analysis description",
@@ -348,11 +349,15 @@ ANNOTATION_TAXONOMY_REMAPPER = {
         'Sexually Explicit Content Request Discussion of CSAM': [
             'sexually explicit content request discussion of csam'],
         'Criminal Planning or Other Suspected Illegal Activity': [
-            'criminal planning or other suspected illegal activity not listed elsewhere'],
+            'criminal planning or other suspected illegal activity not listed elsewhere',
+            'content related to criminal planning or other suspected illegal activity not listed elsewhere',
+        ],
         'Potential Violation of External Policy Ethics': [
             'potential violation of external policy ethics'],
         'Cyberattacks': [
-            'cyberattacks enabling enacting malware computer viruses worms malicious code'],
+            'cyberattacks enabling enacting malware computer viruses worms malicious code',
+            'content related to cyberattacks enabling enacting malware viruses worms etc',
+            ],
         'Weapons Drugs': [
             'weapons drugs'],
         'Apparent attempt to impersonate a real person or organization': [
