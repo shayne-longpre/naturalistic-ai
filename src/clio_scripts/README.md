@@ -6,6 +6,12 @@ This script is based on the dataset for hierarchical task clusters and the assoc
 
 To optimize asynchronous use of the GPT API, hierarchical task annotation is implemented in an iterative manner. If a recursive cluster does not contain multiple sub-tasks, the script automatically proceeds to annotate the next task without invoking the LLM. Caching is handled through the `GPT` class to minimize redundant API calls.
 
+### Download the Economic Index data for predefined clusters
+
+```bash
+git clone https://huggingface.co/datasets/Anthropic/EconomicIndex data/EconomicIndex
+```
+
 ### Usage
 
 ```bash
