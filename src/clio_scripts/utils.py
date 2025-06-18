@@ -4,13 +4,23 @@ import json, re, os, random, sys
 
 sys.path.append("./")
 
-CLUSTER_DATA = "data/EconomicIndex/release_2025_03_27/cluster_level_data/cluster_level_dataset.tsv"
-SKILLS = ["reading comprehension","active listening","writing","speaking","mathematics","science","critical thinking","active learning","learning strategies","monitoring","social perceptiveness","coordination","persuasion","negotiation","instructing","service orientation","complex problem solving","operations analysis","technology design","equipment selection","installation","programming","operations monitoring","operation and control","equipment maintenance","troubleshooting","repairing","quality control analysis","judgment and decision making","systems analysis","systems evaluation","time management","management of financial resources","management of material resources","management of personnel resources","none"]
+from src.clio_scripts.clio_constants import CLUSTER_DATA, SKILLS
 
 
 def get_hierarchical_clusters(file_path=CLUSTER_DATA):
     """
-    Get hierarchical clusters from the DataFrame.
+    Reads the CLUSTER_DATA TSV file and constructs a nested dictionary representing hierarchical clusters.
+    Example structure:
+    {
+        "Explain technical concepts and provide implementation guidance": {
+            "Explain programming concepts and provide technical guidance": [
+                "Explain AI model versions and their capabilities"
+            ],
+            "Help me implement programming algorithms and data structures": [
+                "Implement and analyze tree data structures and algorithms"
+                ]
+        },
+    }
     Args:
         df (pd.DataFrame): DataFrame containing cluster data.
     Returns:
@@ -36,6 +46,10 @@ def get_hierarchical_clusters(file_path=CLUSTER_DATA):
     
 
 def get_task_classification_prompt(options_str):
+    """
+    Constructs a prompt for task classification based on the provided options.
+    Prompt is based on the original paper: https://arxiv.org/abs/2503.04761
+    """
     # commenting out the random sampling of options_str to increase the use of cache
     #options_str = "\n".join(random.sample(options_str, len(options_str)))
     options_str = "\n".join(options_str)
@@ -61,8 +75,11 @@ Does the conversation possibly involve an occupational task?
 What is the answer? You MUST answer either only "Yes" or "No". Provide the answer in <answer> tags with no other commentary.
 """
 
-
 def get_skill_classification_prompt(options_str):
+    """
+    Constructs a prompt for skill classification based on the predefined options.
+    Prompt and the skill options are based on the original paper: https://arxiv.org/abs/2503.04761
+    """
     # shuffle SKILLS and set as options_str
     # options_str = "\n".join(random.sample(options_str, len(options_str)))
     # commenting out the random sampling of options_str to increase the use of cache
@@ -78,7 +95,8 @@ def get_skill_classification_prompt(options_str):
 def get_clio_message(conversation, content):
     """
     Returns a dictionary representing a message with the given content.
-    
+    Message is structured based on the original paper: https://arxiv.org/abs/2503.04761
+
     Args:
         content (str): The content of the message.
         
@@ -185,6 +203,19 @@ def get_next_keys(annotation):
     
 
 def format_samples_per_clio_annotation(samples, metadatas, conversation_ids, clio_annotations, annotation_key):
+    """
+    Formats samples based on the specified annotation key.
+    metadatas, conversation_ids, and clio_annotations are preserved to keep track the order since any sample is skipped if len(next_keys) == 0
+    Args:
+        samples (list): List of sample objects.
+        metadatas (list): List of metadata dictionaries.
+        conversation_ids (list): List of conversation IDs.
+        clio_annotations (list): List of CLIO annotations.
+        annotation_key (str): The key to determine the formatting logic. Options are "is_occupational_task", "cluster_top", "cluster_medium", "cluster_bottom", "occupational_skills".
+    Returns:
+        tuple: A tuple containing formatted samples, metadatas, conversation_ids, and clio_annotations.
+    """
+    # Initialize lists to hold formatted samples, metadatas, conversation_ids, and clio_annotations
     formatted_samples, formatted_metadatas, formatted_conversation_ids, formatted_clio_annotations = [], [], [], []
     for sample, metadata, conversation_id, annotations in zip(samples, metadatas, conversation_ids, clio_annotations):
         if annotation_key == "is_occupational_task":
