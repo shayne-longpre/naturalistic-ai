@@ -35,4 +35,7 @@ class Message(object):
     ):
         metadata_key = f"{source}-{attribute_name}"
         return self.metadata.get(metadata_key).value if metadata_key in self.metadata else None
+    
+    def to_string(self):
+        return f"{self.role.capitalize()}: {self.content}"
 
