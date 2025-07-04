@@ -74,3 +74,8 @@ class Conversation(object):
         else:
             metadata_key = f"{source}-{attribute_name}"
             return self.metadata.get(metadata_key).value if metadata_key in self.metadata else None
+        
+    
+    def to_string(self):
+        """Returns a string representation of the conversation."""
+        return "\n".join([m.to_string() for m in self.conversation])   
