@@ -355,3 +355,77 @@ def display_info_for_turn(
         print("\n****** Previous Turn Message Content:******")
         prev_message = dset.id_lookup(ex_idx + "-" + str(turn-1), level="message")[ex_idx + "-" + str(turn-1)].to_dict()
         print(prev_message["content"])
+
+    
+
+def plot_differences_for_group(
+    group_name: str,
+    group_diff_data: dict,
+    baseline_label: str,
+    comparison_label: str,
+    outdir: str = "data/annotation_analysis_v0/data-slice-comparison"
+):
+    """
+    Plot and save diverging bar charts comparing a group's annotation differences to the baseline.
+
+     Args:
+        group_name (str): Name of the group.
+        group_diff_data (dict): Result of compare_annotations_to_baseline()[group_name],
+            where keys are (attribute_name, source) and values have:
+                "differences": [(label, diff, group_pct, base_pct), …]
+                "metrics": {statistic_name: value, …}
+        baseline_label (str): Name(s) of baseline.
+        comparison_label (str): Name(s) of comparison group.
+        outdir (str): Directory to save plots.
+    """
+    os.makedirs(outdir, exist_ok=True)
+
+    for (attribute_name, source), result in group_diff_data.items():
+        diffs = result["differences"]
+        metrics = result["metrics"]
+
+        if not diffs:
+            print(f"[Skipped] No data available to plot for {attribute_name} ({source})")
+            continue
+
+        labels, differences, group_pcts, base_pcts = zip(*diffs)
+
+        colors = ["green" if diff > 0 else "red" for diff in differences]
+
+        plt.figure(figsize=(12, max(6, len(labels) * 0.4)))
+        y_pos = np.arange(len(labels))
+        bars = plt.barh(y_pos, differences, color=colors)
+
+        plt.yticks(y_pos, labels)
+        plt.axvline(0, color="black", linewidth=0.8)
+        plt.title(f"{comparison_label} vs {baseline_label}\nTop Differences for {attribute_name} ({source})")
+        plt.xlabel("Percentage Difference from Baseline")
+        plt.gca().invert_yaxis()
+
+        for i, bar in enumerate(bars):
+            plt.text(
+                bar.get_width() + (0.5 if bar.get_width() > 0 else -0.5),
+                bar.get_y() + bar.get_height() / 2,
+                f"{differences[i]:+.1f}%",
+                va='center',
+                ha='left' if bar.get_width() > 0 else 'right',
+                fontsize=8
+            )
+
+        # Save plot
+        safe_attr = attribute_name.replace(" ", "_")
+        safe_src = source.replace(" ", "_")
+        safe_group = ''.join([w[0].upper() for w in comparison_label.split()])
+        safe_base = ''.join([w[0].upper() for w in baseline_label.split()])
+        fname = f"diff_{safe_group}{safe_base}_{safe_attr}_{safe_src}.png"
+        plot_path = os.path.join(outdir, fname)
+        plt.tight_layout()
+        plt.savefig(plot_path)
+        plt.close()
+        print(f"✅ Saved plot: {plot_path}")
+
+        # Optionally print metrics
+        print(f"📊 Metrics for {attribute_name} ({source}):")
+        for k, v in metrics.items():
+            print(f"   {k}: {v}")
+        print("-" * 50)
