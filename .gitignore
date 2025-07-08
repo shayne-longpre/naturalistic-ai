@@ -164,6 +164,7 @@ cython_debug/
 dataset_downloads/
 playground.ipynb
 
-
+notebooks/.DS_Store
+.gitignore
 data/static/
-notebooks/multiturn-analysis.ipynb
+notebooks/data-slice-comparisons.ipynb
