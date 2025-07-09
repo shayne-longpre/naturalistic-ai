@@ -1,11 +1,13 @@
+import os
 import sys
 import typing
+import csv
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tabulate import tabulate
-from collections import Counter
+from collections import Counter, defaultdict
 
 sys.path.append("./")
 
@@ -179,7 +181,8 @@ def plot_confusion_matrix(
 
 
 def analyze_pair_annotations(
-    annotations: typing.List[typing.Tuple[str, typing.Any, typing.Any]]
+    annotations: typing.List[typing.Tuple[str, typing.Any, typing.Any]],
+    order_matters: bool = True,
 ) -> pd.DataFrame:
     """
     Analyze pairs of annotations and produce a CSV report in descending order of frequency.
@@ -202,7 +205,11 @@ def analyze_pair_annotations(
     for uid, val1, val2 in annotations:
         norm_val1 = tuple(sorted(val1)) if isinstance(val1, list) else val1
         norm_val2 = tuple(sorted(val2)) if isinstance(val2, list) else val2
-        normalized_pairs.append((uid, norm_val1, norm_val2) if norm_val1 < norm_val2 else (uid, norm_val2, norm_val1))
+        if order_matters:  # If we do care which side is which:
+            normalized_pairs.append((uid, norm_val1, norm_val2))
+        else:  # If we don't care which side is which:
+            normalized_pairs.append((uid, norm_val1, norm_val2) if norm_val1 < norm_val2 else (uid, norm_val2, norm_val1))
+        
     
     # Count the occurrences of each pair
     pair_counts = Counter([(v1, v2) for _, v1, v2 in normalized_pairs])
@@ -263,3 +270,162 @@ def tabulate_annotation_pair_summary(
     # Format boolean values as "T"/"F" for better readability
     display_df['matching'] = display_df['matching'].map({True: 'T', False: 'F'})
     return tabulate(display_df, headers='keys', tablefmt='grid', showindex=False)
+
+
+def run_interrater_comparison(
+    dset, 
+    task_name,
+    annotation_source_1,
+    annotation_source_2,
+    outdirpath,
+):
+    info_to_plot1 = dset.get_annotation_distribution(name=task_name, level="message", annotation_source=annotation_source_1)
+    info_to_plot2 = dset.get_annotation_distribution(name=task_name, level="message", annotation_source=annotation_source_2)
+    info_to_plot1b = dset.get_annotation_distribution(name=task_name, level="message", annotation_source=annotation_source_1, annotation_as_list_type=True)
+    info_to_plot2b = dset.get_annotation_distribution(name=task_name, level="message", annotation_source=annotation_source_2, annotation_as_list_type=True)
+
+    outdir = os.path.join(outdirpath, "{annotation_source_1}--{annotation_source_2}/{task_name}")
+    os.makedirs(outdir, exist_ok=True)
+    fig = barplot_distribution(
+        {"Split1": info_to_plot1, "Split2": info_to_plot2}, normalize=True, 
+        xlabel=task_name, ylabel="Proportion", title="",
+        output_path=f"{outdir}/barchart.png", order="descending")
+    
+    fig_b = barplot_distribution(
+        {"Split1": info_to_plot1b, "Split2": info_to_plot2b}, normalize=True, 
+        xlabel=task_name, ylabel="Proportion", title="",
+        output_path=f"{outdir}/multilabel_barchart.png", order="descending")
+
+    info_to_plot_cm, agreement_metrics, paired_values = dset.get_joint_distribution(
+        annotations1=(task_name, annotation_source_1), 
+        annotations2=(task_name, annotation_source_2), 
+        level="message",
+        compute_disagreement=True,
+        verbose=True
+    )
+    # print(info_to_plot_cm)
+
+    fig2 = plot_confusion_matrix(info_to_plot_cm, normalize=True, xlabel="", ylabel="", title="Confusion Matrix", output_path=f"{outdir}/confusion_matrix.png")
+
+    # print(paired_values[0:3])
+    df = analyze_pair_annotations(paired_values, order_matters=True)
+    df.to_csv(f"{outdir}/pair_frequencies.csv", index=False, quoting=csv.QUOTE_NONNUMERIC)
+
+    print()
+    print(f"-----------------{task_name}-----------------")
+    print({k: round(v, 3) if isinstance(v, float) else v for k, v in agreement_metrics.items()})
+    print(tabulate_annotation_pair_summary(df, 20))
+    print(len(df))
+    print()
+    return paired_values
+
+
+def display_info_for_turn(
+    dset,
+    ex_idx_turn,
+    relevant_keys,
+):
+    """For a given dataset and example ID, print out the details and annotations for `relevant_keys`."""
+
+    ex_idx, turn = ex_idx_turn.split("-")
+    turn = int(turn)
+    message = dset.id_lookup(ex_idx_turn, level="message")[ex_idx_turn].to_dict()
+    role = message['role']
+    # relevant_keys = prompt_fields_new if role == "user" else response_fields_new
+    task_to_source_to_vals = defaultdict(dict)
+    for key in message["metadata"].keys():
+        source, task = key.split("-")
+        if task in relevant_keys:
+            task_to_source_to_vals[task][source] = message["metadata"][key]
+
+    print(f"IDX: {ex_idx} | Turn: {turn} | Role: {role}")
+    print(f"-------------------------------------------")
+    for task, source_vals in task_to_source_to_vals.items():
+        print()
+        print(f"TASK: {task}")
+        for source, val in source_vals.items():
+            src_info = val["annotator"] if "split" in source else source
+            print(f"{src_info}:   {val['value']}")
+
+    print("\n****** Message Content:******")
+    print(message["content"])
+    print()
+
+    if turn > 0:
+        print("\n****** Previous Turn Message Content:******")
+        prev_message = dset.id_lookup(ex_idx + "-" + str(turn-1), level="message")[ex_idx + "-" + str(turn-1)].to_dict()
+        print(prev_message["content"])
+
+    
+
+def plot_differences_for_group(
+    group_name: str,
+    group_diff_data: dict,
+    baseline_label: str,
+    comparison_label: str,
+    outdir: str = "data/annotation_analysis_v0/data-slice-comparison"
+):
+    """
+    Plot and save diverging bar charts comparing a group's annotation differences to the baseline.
+
+     Args:
+        group_name (str): Name of the group.
+        group_diff_data (dict): Result of compare_annotations_to_baseline()[group_name],
+            where keys are (attribute_name, source) and values have:
+                "differences": [(label, diff, group_pct, base_pct), …]
+                "metrics": {statistic_name: value, …}
+        baseline_label (str): Name(s) of baseline.
+        comparison_label (str): Name(s) of comparison group.
+        outdir (str): Directory to save plots.
+    """
+    os.makedirs(outdir, exist_ok=True)
+
+    for (attribute_name, source), result in group_diff_data.items():
+        diffs = result["differences"]
+        metrics = result["metrics"]
+
+        if not diffs:
+            print(f"[Skipped] No data available to plot for {attribute_name} ({source})")
+            continue
+
+        labels, differences, group_pcts, base_pcts = zip(*diffs)
+
+        colors = ["green" if diff > 0 else "red" for diff in differences]
+
+        plt.figure(figsize=(12, max(6, len(labels) * 0.4)))
+        y_pos = np.arange(len(labels))
+        bars = plt.barh(y_pos, differences, color=colors)
+
+        plt.yticks(y_pos, labels)
+        plt.axvline(0, color="black", linewidth=0.8)
+        plt.title(f"{comparison_label} vs {baseline_label}\nTop Differences for {attribute_name} ({source})")
+        plt.xlabel("Percentage Difference from Baseline")
+        plt.gca().invert_yaxis()
+
+        for i, bar in enumerate(bars):
+            plt.text(
+                bar.get_width() + (0.5 if bar.get_width() > 0 else -0.5),
+                bar.get_y() + bar.get_height() / 2,
+                f"{differences[i]:+.1f}%",
+                va='center',
+                ha='left' if bar.get_width() > 0 else 'right',
+                fontsize=8
+            )
+
+        # Save plot
+        safe_attr = attribute_name.replace(" ", "_")
+        safe_src = source.replace(" ", "_")
+        safe_group = ''.join([w[0].upper() for w in comparison_label.split()])
+        safe_base = ''.join([w[0].upper() for w in baseline_label.split()])
+        fname = f"diff_{safe_group}{safe_base}_{safe_attr}_{safe_src}.png"
+        plot_path = os.path.join(outdir, fname)
+        plt.tight_layout()
+        plt.savefig(plot_path)
+        plt.close()
+        print(f"✅ Saved plot: {plot_path}")
+
+        # Optionally print metrics
+        print(f"📊 Metrics for {attribute_name} ({source}):")
+        for k, v in metrics.items():
+            print(f"   {k}: {v}")
+        print("-" * 50)

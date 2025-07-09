@@ -24,19 +24,28 @@ class GPT(object):
         GUIDELINES_PROMPT_TEMPLATE (str): Loaded guidelines prompt for guiding the assistant's responses.
     """
     def __init__(self, 
+                 base_url='https://api.openai.com/v1/chat/completions',
+                 key_env='OPENAI_API_KEY',
                  language='en',
                  model='gpt-3.5-turbo',
                  prompt='',
                  temperature=1,
                  top_p=1,
-                 cache_id='v0'):
-    
-        self.load_API_key()
+                 cache_id='v0',
+                 disable_token_counting=False,):
+
+        self.load_API_key(key_env, base_url)
+        self.api_key = os.environ.get(key_env)
+        self.base_url = base_url
         self.language_code = language
         self.model = model
         self.temperature = temperature
         self.top_p = top_p
-        # self.prompt_id = prompt
+        self.disable_token_counting = disable_token_counting
+        if self.disable_token_counting:
+            print("Token counting is disabled.")
+        else:
+            print("Token counting is enabled.")
 
         self.SYSTEM_PROMPT = prompt
 
@@ -60,15 +69,16 @@ class GPT(object):
             "output_tokens": 0
         }
 
-    def load_API_key(self):
+    def load_API_key(self, var='OPENAI_API_KEY', base_url='https://api.openai.com/v1/chat/completions'):
         try:
             load_dotenv(dotenv_path='data/.env')
-            openai.api_key = os.environ['OPENAI_API_KEY']
-            print("OpenAI API key successfully loaded!")
+            openai.api_key = os.environ[var]
+            openai.api_base = base_url
+            print("API key and base_url successfully loaded!")
         except KeyError:
-            print("Error: OPENAI_API_KEY environment variable is not set.")
+            print(f"Error: {var} environment variable is not set.")
         except openai.error.AuthenticationError:
-            print("Error: Incorrect OpenAI API key.")
+            print("Error: Incorrect API key.")
 
     # def load_prompt_from_json(self):
     #     """Loads a specific prompt from a JSON file based on a provided key, defaults to 'scraping-policy' prompt.
@@ -109,21 +119,39 @@ class GPT(object):
         of the `cache` attribute to a file specified by `cache_file_path`. The JSON data is 
         formatted with an indentation of 4 spaces, making it human-readable.
         """
+        
+        os.makedirs(os.path.dirname(self.cache_file_path), exist_ok=True)
+
         with open(self.cache_file_path, 'w') as file:
             json.dump(self.cache, file, indent=4, ensure_ascii=False)
 
     def count_tokens(self, text):
-        # https://github.com/openai/tiktoken/blob/main/tiktoken/model.py#L87
-        try:
-            encoding = tiktoken.encoding_for_model(self.model)
-        except:
-            print(f"[Warning] No tokenizer found for model '{self.model}', using 'o200k_base' as fallback.")
-            encoding = tiktoken.get_encoding("o200k_base")
-        token_count = len(encoding.encode(text))
-        return token_count
-    
+        if self.disable_token_counting:
+            return 0
+        else:
+            # https://github.com/openai/tiktoken/blob/main/tiktoken/model.py#L87
+            try:
+                encoding = tiktoken.encoding_for_model(self.model)
+            except:
+                print(f"[Warning] No tokenizer found for model '{self.model}', using 'o200k_base' as fallback.")
+                encoding = tiktoken.get_encoding("o200k_base")
+            token_count = len(encoding.encode(text))
+            return token_count
 
-    def make_openai_request(self, final_prompt):
+    @staticmethod
+    def stringify_messages(messages_list):
+        """
+        Converts a list of message dictionaries into a single string representation.
+        
+        Args:
+            messages (list): A list of dicts with 'role' and 'content' keys.
+            
+        Returns:
+            str: A single string representing the full conversation.
+        """
+        return "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in messages_list])
+
+    def make_openai_request(self, final_prompt=None, messages_list=None):
         """
         Makes a request to the OpenAI Chat API to generate completions for a given prompt.
 
@@ -133,20 +161,26 @@ class GPT(object):
         Returns:
         - str: The response from the OpenAI Chat API containing the completion for the given prompt.
         """
+        if final_prompt is not None:
+            messages=[
+                    {"role": "system", "content": self.SYSTEM_PROMPT},
+                    # {"role": "user", "content": self.USER_PROMPT_1},
+                    # {"role": "assistant", "content": self.ASSISTANT_PROMPT_1},
+                    {"role": "user", "content": final_prompt}
+                ]
+        elif messages_list is not None:
+            messages = [{"role": "system", "content": self.SYSTEM_PROMPT},] + messages_list
+        else:
+            raise ValueError("Either final_prompt or messages_list must be provided.")
         response = openai.ChatCompletion.create(
             model=self.model,
             temperature=self.temperature,           # lower temperature for more deterministic outputs
             top_p=self.top_p,                 # lower top_p to decrease randomness
-            messages=[
-                {"role": "system", "content": self.SYSTEM_PROMPT},
-                # {"role": "user", "content": self.USER_PROMPT_1},
-                # {"role": "assistant", "content": self.ASSISTANT_PROMPT_1},
-                {"role": "user", "content": final_prompt}
-            ]
+            messages=messages
         )
         return response['choices'][0]['message']['content'].strip(" \n")
 
-    async def make_openai_request_async(self, session, final_prompt):
+    async def make_openai_request_async(self, session, final_prompt=None, messages_list=None):
         """
         Makes an asynchronous request to the OpenAI Chat API to generate completions for a given prompt.
 
@@ -157,21 +191,27 @@ class GPT(object):
         Returns:
         - str: The response from the OpenAI Chat API containing the completion for the given prompt.
         """
-        url = "https://api.openai.com/v1/chat/completions"  # endpoint for gpt-4, gpt-4-turbo-preview, gpt-3.5-turbo
+        url = self.base_url  # endpoint for gpt-4, gpt-4-turbo-preview, gpt-3.5-turbo
         headers = {
-            "Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}",
+            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
+        if final_prompt is not None:
+            messages=[
+                    {"role": "system", "content": self.SYSTEM_PROMPT},
+                    # {"role": "user", "content": self.USER_PROMPT_1},
+                    # {"role": "assistant", "content": self.ASSISTANT_PROMPT_1},
+                    {"role": "user", "content": final_prompt}
+                ]
+        elif messages_list is not None:
+            messages = [{"role": "system", "content": self.SYSTEM_PROMPT},] + messages_list
+        else:
+            raise ValueError("Either final_prompt or messages_list must be provided.")
         payload = {
             "model": self.model,
             "temperature": self.temperature,           # lower temperature for more deterministic outputs
             "top_p": self.top_p,                 # lower top_p to decrease randomness
-            "messages": [
-                {"role": "system", "content": self.SYSTEM_PROMPT},
-                # {"role": "user", "content": self.USER_PROMPT_1},
-                # {"role": "assistant", "content": self.ASSISTANT_PROMPT_1},
-                {"role": "user", "content": final_prompt}
-            ]
+            "messages": messages
         }
         input_token_count = self.count_tokens(final_prompt)
         self.token_usage["input_tokens"] += input_token_count  # Track input tokens
@@ -213,17 +253,26 @@ class GPT(object):
         for formatted_prompt in batch:
             # formatted_prompt = custom_guidelines_prompt.format(prompt) if custom_guidelines_prompt else self.GUIDELINES_PROMPT_TEMPLATE.format(prompt)
             # cache_id = f"{self.prompt_id}: {formatted_prompt}"
-
-            # TODO: hash it?
-            prompt_id = formatted_prompt
+            is_message_list = False
+            if isinstance(formatted_prompt, list):
+                # If the prompt is a list, convert it to a string representation
+                prompt_id = self.stringify_messages(formatted_prompt)
+                is_message_list = True
+            else:
+                # TODO: hash it?
+                prompt_id = formatted_prompt
             input_token_count = self.count_tokens(formatted_prompt)
 
             if prompt_id in self.cache:
                 self.token_usage["cached_input_tokens"] += input_token_count  # Cached input tokens
                 responses.append(self.cache[prompt_id])
+                print(f"Using cached response for prompt ID: {prompt_id}")
             else:
                 self.token_usage["input_tokens"] += input_token_count  # Normal input tokens
-                task = asyncio.create_task(self.make_openai_request_async(session, formatted_prompt))
+                if is_message_list:
+                    task = asyncio.create_task(self.make_openai_request_async(session, messages_list=formatted_prompt))
+                else:
+                    task = asyncio.create_task(self.make_openai_request_async(session, formatted_prompt=formatted_prompt))
                 tasks.append((prompt_id, task))
 
         api_responses = await asyncio.gather(*(task[1] for task in tasks))
