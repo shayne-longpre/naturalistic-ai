@@ -2,16 +2,20 @@ import sys
 import os
 import json
 import pandas as pd
-from helpers import io
 
 sys.path.append("./")
 
+from src.helpers import io
 
 def char_count(s):
     return len(s)
 
 
 def read_json(json_file):
+    # create file if not exists
+    if not os.path.exists(json_file):
+        with open(json_file, 'w', encoding='utf-8') as f:
+            json.dump({}, f, ensure_ascii=False)
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
     return data

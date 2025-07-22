@@ -43,6 +43,7 @@ def add_conversation_ids_to_label_studio_files_v2(
             
             # Skip if no conversation_id is found
             if not conversation_id:
+                # print('no')
                 continue
             
             # Add each turn's text to the lookup dictionary
@@ -97,15 +98,17 @@ def add_conversation_ids_to_label_studio_files_v2(
             # Reconstruct the complete conversation text to match with our dictionary
             conv_text = ""
             for turn in conversation_turns:
-                conv_text += turn.get('content', '')
+                conv_text += turn.get('text', '')
             
             # If conv_text is empty, try with turn1_dialogue
             if not conv_text and turn1_dialogue:
                 for turn in turn1_dialogue:
                     conv_text += turn.get('text', '')
             
+            # print(conv_text)
             # Try to find a matching conversation_id
             conversation_id = text_to_conversation_id.get(conv_text)
+            # print(conversation_id)
             
             if conversation_id:
                 # Set the conversation_id in the record
@@ -168,7 +171,7 @@ def add_conversation_ids_to_label_studio_files(
             conv_text = ""
             for turn in conversation_datum.get('conversation', []):
                 # In the conversations file, content is under 'content'
-                conv_text += turn.get('content', '')
+                conv_text += turn.get('text', '')
 
             if conv_text in text_to_conversation_id:
                 print("Duplicate text in conversation...")
@@ -232,6 +235,7 @@ def add_conversation_ids_to_label_studio_files(
 def run_automatic_analysis_v0(dirpath):
 
     dataset = run_test_cedric(dirpath)
+    # assert 1 == 0
     # # Load dataset
     # dataset = Dataset.load('data/sample120.json')
 
@@ -260,46 +264,35 @@ def run_test_cedric(dirpath):
     # TODO: This adds conversation IDs to LabelStudio data and saves it to `data/labelstudio_outputs_wcids/`
     # Remove this when we have them in the LS outputs by default.
     add_conversation_ids_to_label_studio_files_v2(
-        os.path.join(dirpath, "labelstudio_outputs_v2/"),
+        os.path.join(dirpath, "labelstudio_outputs_v3/"),
         os.path.join(dirpath, 'sample120.json'),
-        os.path.join(dirpath, "labelstudio_outputs_wcids_v2/"),
+        os.path.join(dirpath, "labelstudio_outputs_wcids_v3/"),
     )
 
     # split annotations into two folders without any duplicate conversation IDs in each file.
     split_labelstudio_files_by_conversation_id_v2(
-        input_folder=os.path.join(dirpath, "labelstudio_outputs_wcids_v2/"),
-        output_folder1=os.path.join(dirpath, "labelstudio_outputs_split1_v2/"),
-        output_folder2=os.path.join(dirpath, "labelstudio_outputs_split2_v2/"),
+        input_folder=os.path.join(dirpath, "labelstudio_outputs_wcids_v3/"),
+        output_folder1=os.path.join(dirpath, "labelstudio_outputs_split1_v3/"),
+        output_folder2=os.path.join(dirpath, "labelstudio_outputs_split2_v3/"),
     )
 
     annotation_sets1 = load_labelstudio_v2(
-        os.path.join(dirpath, "labelstudio_outputs_split1_v2"), 
+        os.path.join(dirpath, "labelstudio_outputs_split1_v3"), 
         source="split1",
         dataset_id="sample120",
         level="message",
     )
-    annotation_sets2 = load_labelstudio_v2(
-        os.path.join(dirpath, "labelstudio_outputs_split2_v2"), 
-        source="split2",
-        dataset_id="sample120",
-        level="message",
-    )
-    
-    # Testing:
-    # for task_key in annotation_sets1:
-    #     num_annotations = len(annotation_sets1[task_key].annotations) + len(annotation_sets2[task_key].annotations)
-    #     print(f"Total annotations for {task_key}: {num_annotations}\n")
+    # annotation_sets2 = load_labelstudio_v2(
+    #     os.path.join(dirpath, "labelstudio_outputs_split2_v2"), 
+    #     source="split2",
+    #     dataset_id="sample120",
+    #     level="message",
+    # )
 
     for task, annotation_set in annotation_sets1.items():
         dataset.add_annotations(annotation_set)
-    for task, annotation_set in annotation_sets2.items():
-        dataset.add_annotations(annotation_set)
-
-    # Testing:
-    # for task_key in annotation_sets1:
-    #     a1_count = sum([1 if f"split1-{task_key}" in m.metadata else 0 for cc in dataset.data for m in cc.conversation])
-    #     a2_count = sum([1 if f"split2-{task_key}" in m.metadata else 0 for cc in dataset.data for m in cc.conversation])
-    #     print(f"Total annotations for {task_key}: {a1_count + a2_count}\n")
+    # for task, annotation_set in annotation_sets2.items():
+    #     dataset.add_annotations(annotation_set)
 
     return dataset
 
