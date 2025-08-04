@@ -14,7 +14,7 @@ sys.path.append("./")
 from src.classes.conversation import Conversation
 from src.classes.dataset import Dataset
 
-from helpers import io
+from src.helpers import io
 import uuid
 
 """
@@ -87,7 +87,8 @@ def download_wildchat_v1():
 # Download WildChat (private repo)
 def download_wildchat_private(sample=None):
     print("Starting Download for Yuntian's WildChat-1M-Full...")
-    dset = io.huggingface_download("yuntian-deng/WildChat-1M-Full-with-parameters-internal", split="train", sample=sample)
+    # dset = io.huggingface_download("yuntian-deng/WildChat-1M-Full-with-parameters-internal", split="train", sample=sample)
+    dset = io.huggingface_download("yuntian-deng/WildChat-4.8M-Processed-Internal", split="train", sample=sample)
 
     def process_data(datum):
         state = datum.get('state')
@@ -272,7 +273,7 @@ def download_mmlu():
                 {
                     "role": "user",
                     "turn": 0, 
-                    "content": datum.get("question") + " " + " ".join(f"{choice_indiciators[i]} {datum.get("choices")[i]}" for i in range(len(datum.get("choices")))),
+                    "content": datum.get("question") + " " + " ".join(f"{choice_indiciators[i]} {datum.get('choices')[i]}" for i in range(len(datum.get("choices")))),
                     "image": "",
                 }
             ]
