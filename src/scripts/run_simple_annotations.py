@@ -11,6 +11,7 @@ from huggingface_hub import hf_hub_download
 import os 
 from src.classes.annotation_record import AnnotationRecord
 from src.classes.annotation_set import AnnotationSet
+from lingua import LanguageDetectorBuilder, Language, LanguageDetector
 
 sys.path.append("./")
 
@@ -27,32 +28,75 @@ def get_token_count(x, tokenizer):
     enc = tokenizer.encode(x)
     return len(enc)
 
+def check_for_math(text, threshold = 3): 
+    "This function checks if a give string contains >= threshold occurances of common mathematical patterns, such as math operations and symbols."
+    math_patterns = [
+        r'((?:[+\-]?\d*x\^\d+\s*)+)',         # matches sequences like x^5 + 3x^3 + x^2 + 2x
+        r'\b[+\-]?\d*x\^\d+\b',               # matches terms like 2x^2, x^3, etc.
+        r'\[\s*[a-z](?:\^\d+)?\s*\]',         # matches [x], [x^2], [2x], etc.
+        r'\b[+\-]?\d+x\b',                    # terms like +2x, -4x, 1x, 3x, 9x, etc.
+        r'[a-z]\([x-z]\)\s*=',                # function definitions like f(x)=, g(x)=, a(x)=
+        r'\b[a-z]\s*[+\-*/=]\s*[a-z0-9]',     # variables with operators
+        r'[a-z]\^[0-9]+',                     # exponents
+        r'[+\-*/=]\s*[0-9a-z]',               # mathematical operators
+    ]
+    count = 0 
+    for pattern in math_patterns:
+        if re.search(pattern, text):
+            count += 1
 
-def predict_languages(text, model): 
-    """ Predict languages in a given text using a fasttext language identification model.
-    This function splits the text into sentences and predicts the language for each sentence. 
-    All predicted languages are returned as a non-duplicated list. 
-    If no language is detected, ["unknown"] is returned.
-    """
+    if count >= threshold:
+        return True
     
-    languages = []
-    # Split text by sentence-ending punctuation: . ? !
-    sentences = re.split(r'[.!?]\s*', text)
-    sentences = [s for s in sentences if s.strip()]  # Remove empty strings
+    return False
+ 
 
-    for sentence in sentences:
-        try:
-            #lang = detect(sentence)
-            lang = [x[0].replace("__label__", "").replace("_Latn", "") for x in model.predict([sentence], k=1)[0]][0]
-        except:
-            lang = "unknown"
-        languages.append(lang)
-    
-    # Return unique languages detected in the text
-    languages = list(set(languages))
-    if len(languages) == 0:
-        languages.append("unknown")
-    return languages 
+def predict_languages_lingua(text: str =  "Find all zeros in the indicated finite field of the given polynomial", detector: LanguageDetector = None): 
+    """This function uses the Lingua library to detect languages in a given piece of text. 
+       The input is a string to detect languages for, and the Lingua detector (passed in function to avoid loading the model for each example). 
+       The function returns a de-deuplciated list of languages detected with a confidence above 0.05.
+       
+       ---Handling Math Equations---
+       During initial testing, math equations were frequently misclassified as LATIN (e.g., "x^2 + 3x + 2 = 0"). To mitigate this, 
+       when LATIN is detected by Lingua, this function splits the text into sentences, removes any sentence with a significant (>= 3) number of mathmatical patterns, 
+       and rejoins the sentences. Once the text is rejoined, it checks the confidence of LATIN again. If the confidence is still above 0.05, it is considered a valid detection.
+       If the confidence is reduced to below 0.05, the example is not labled as LATIN. 
+
+       One consequence of this approach is that this function will be unable to detect Latin in a sentence with significant math. Our experience has been that most Latin examples 
+       have at least one sentence without math, which would produce a correct classification. 
+       """
+       
+    found_languages = []
+
+    for result in detector.detect_multiple_languages_of(text):
+        
+        confidence = detector.compute_language_confidence(text, language=result.language)
+        #print(f"Detected languages: {result.language.name} with confidence {confidence}, specifically the portion: {text[result.start_index:result.end_index]}")
+
+        if confidence > 0.05:
+            found_language = result.language.name
+            if found_language == "LATIN":  
+                segments = re.split(r'[.!?\n\t]+', text[result.start_index:result.end_index]) # split into sentences by punctuation, new line, or tabs. 
+                non_math_segments = [segment for segment in segments if not check_for_math(segment)]
+                non_math_combined = "\n".join(non_math_segments)
+                latin_confidence = detector.compute_language_confidence(non_math_combined, language=result.language)
+                if latin_confidence > 0.05:
+                    found_languages.append(found_language)
+                    if found_language != "ENGLISH": 
+                        print(f"Detected language: {found_language} with confidence {confidence} for text: {text[result.start_index:result.end_index]}")
+                        print("non math version: ", non_math_combined)
+                    #print(f"Detected LATIN language with confidence {latin_confidence} after removing math segments.")
+                else: 
+                    #print(f"Detected LATIN language, but confidence {latin_confidence} is too low after removing math segments. Skipping: {text[result.start_index:result.end_index]}")
+                    continue     
+            else: 
+                if found_language != "ENGLISH": 
+                    print(f"Detected language: {found_language} with confidence {confidence} for text: {text[result.start_index:result.end_index]}")
+                found_languages.append(found_language)
+       
+    found_languages = list(set(found_languages)) # de-duplicate the list of languages
+    #print(f"RETURN: {found_languages}")
+    return found_languages 
 
 
 def run_simple_annotations(args, verbose = True):
@@ -62,13 +106,12 @@ def run_simple_annotations(args, verbose = True):
         "word_count": get_word_count,
         "char_count": get_char_count,
         "token_count": get_token_count,
-        "language": predict_languages
+        "languages": predict_languages_lingua
     }
 
     # Load tokenizer and language ID model
     tokenizer = tiktoken.encoding_for_model("gpt-4o") 
-    model_path = hf_hub_download(repo_id="facebook/fasttext-language-identification", filename="model.bin") 
-    language_model = fasttext.load_model(model_path)  
+    language_detector = LanguageDetectorBuilder.from_languages(*Language.all()).build()
 
     # Load dataset    
     dataframe = pd.read_json(args.input, orient="records")
@@ -97,9 +140,8 @@ def run_simple_annotations(args, verbose = True):
                     metric_value = metric_function(text, tokenizer)
                     annotator = "tiktoken"
                 elif "language" in metric_name:
-                    # If the metric is predicting languages, pass in the language ID model. 
-                    metric_value = predict_languages(text, language_model)
-                    annotator = "fasttext"
+                    metric_value = predict_languages_lingua(text, language_detector)
+                    annotator = "lingua"
                 else:
                     metric_value = metric_function(text)
 
