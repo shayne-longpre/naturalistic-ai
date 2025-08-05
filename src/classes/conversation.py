@@ -22,7 +22,7 @@ class Conversation(object):
         metadata={},
     ):
         assert "-" not in conversation_id, \
-            f"Please do not include '-' in the conversation_id, as we use this character for joining/splitting keys."
+            f"Please do not include '-' in the conversation_id, as we use this character for joining/splitting keys. ID is {conversation_id}"
         self.conversation_id = conversation_id
         self.dataset_id = dataset_id
         self.user_id = user_id
