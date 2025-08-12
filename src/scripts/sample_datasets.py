@@ -23,18 +23,26 @@ logger = logging.getLogger(__name__)
 
 
 class TwoStageSampler:
-    """Implements a two-stage sampling approach for conversation data."""
+    """
+    Implements a two-stage sampling approach for conversation data.
+    
+    Stage 1: Filter to users with conversation counts within bounds
+    Stage 2: Temporal stratified sampling across all (filtered) conversations
+    Stage 3: User-centric temporal stratified sampling within selected users
+    """
     
     def __init__(
         self,
         min_conversations: int = 10,
         max_conversations: int = 200,
         conversations_per_user: int = 30,
+        user_temporal_sampling: bool = True,
         seed: int = 42
     ):
         self.min_conversations = min_conversations
         self.max_conversations = max_conversations
         self.conversations_per_user = conversations_per_user
+        self.user_temporal_sampling = user_temporal_sampling
         self.seed = seed
         random.seed(seed)
         
@@ -82,6 +90,11 @@ class TwoStageSampler:
     def get_month_bin(self, dt: datetime) -> str:
         """Get month bin identifier from datetime."""
         return dt.strftime('%Y-%m')
+    
+    def get_quarter_bin(self, dt: datetime) -> str:
+        """Get quarter bin identifier from datetime."""
+        quarter = (dt.month - 1) // 3 + 1
+        return f"{dt.year}-Q{quarter}"
     
     def temporal_stratified_sample(
         self,
@@ -160,19 +173,22 @@ class TwoStageSampler:
         conversations: List[Conversation],
         n_users: int,
         prioritize_users: Optional[Set[str]] = None
-    ) -> List[Conversation]:
+    ) -> Tuple[List[Conversation], Dict[str, Dict]]:
         """
-        Sample up to K conversations per user from N randomly selected users.
+        Sample users and optionally perform temporal stratified sampling within each user's conversations.
         
         Args:
             conversations: List of conversations to sample from
             n_users: Number of users to sample
             prioritize_users: Set of user IDs to prioritize (from temporal sample)
+            
+        Returns:
+            Tuple of (sampled conversations, user temporal weights by user_id)
         """
         # Check if user information exists
         if not conversations or not hasattr(conversations[0], 'user_id'):
             logger.warning("No user information found. Skipping user-centric sampling.")
-            return []
+            return [], {}
         
         # Group conversations by user
         user_conversations = defaultdict(list)
@@ -198,17 +214,109 @@ class TwoStageSampler:
             selected_users = random.sample(list(all_users), min(n_users, len(all_users)))
         
         logger.info(f"Selected {len(selected_users)} users for user-centric sampling")
+        logger.info(f"User temporal sampling: {'enabled (quarterly)' if self.user_temporal_sampling else 'disabled (random)'}")
         
-        # Sample conversations from selected users
+        # Sample from each user's conversations
         sampled = []
+        user_temporal_weights = {}
+        
         for user_id in selected_users:
             user_convs = user_conversations[user_id]
             n_to_sample = min(self.conversations_per_user, len(user_convs))
-            sampled.extend(random.sample(user_convs, n_to_sample))
+            
+            # If user has few conversations, take all of them
+            if len(user_convs) <= n_to_sample:
+                user_sampled = user_convs
+                user_temporal_weights[user_id] = {
+                    'total_conversations': len(user_convs),
+                    'sampled_conversations': len(user_convs),
+                    'sampling_method': 'all',
+                    'temporal_weights': {}
+                }
+                logger.debug(f"User {user_id}: sampled all {len(user_convs)} conversations")
+            else:
+                if self.user_temporal_sampling:
+                    # Perform temporal stratified sampling for this user
+                    user_sampled, user_weights = self._user_temporal_stratified_sample(
+                        user_convs, n_to_sample, user_id
+                    )
+                    user_temporal_weights[user_id] = {
+                        'total_conversations': len(user_convs),
+                        'sampled_conversations': len(user_sampled),
+                        'sampling_method': 'temporal_stratified_quarterly',
+                        'temporal_weights': user_weights
+                    }
+                else:
+                    # Random sampling
+                    user_sampled = random.sample(user_convs, n_to_sample)
+                    user_temporal_weights[user_id] = {
+                        'total_conversations': len(user_convs),
+                        'sampled_conversations': len(user_sampled),
+                        'sampling_method': 'random',
+                        'temporal_weights': {}
+                    }
+                    logger.debug(f"User {user_id}: randomly sampled {len(user_sampled)} from {len(user_convs)} conversations")
+            
+            sampled.extend(user_sampled)
             
         logger.info(f"Sampled {len(sampled)} conversations from user-centric sampling")
         
-        return sampled
+        return sampled, user_temporal_weights
+    
+    def _user_temporal_stratified_sample(
+        self,
+        user_conversations: List[Conversation],
+        sample_size: int,
+        user_id: str
+    ) -> Tuple[List[Conversation], Dict[str, float]]:
+        """
+        Perform temporal stratified sampling within a single user's conversations (by quarter).
+        """
+        # Group user's conversations by quarter
+        quarter_bins = defaultdict(list)
+        no_time_convs = []
+        
+        for conv in user_conversations:
+            try:
+                if hasattr(conv, 'time') and conv.time:
+                    dt = parse_date(conv.time) if isinstance(conv.time, str) else conv.time
+                    if isinstance(dt, datetime):
+                        bin_key = self.get_quarter_bin(dt)
+                        quarter_bins[bin_key].append(conv)
+                    else:
+                        no_time_convs.append(conv)
+                else:
+                    no_time_convs.append(conv)
+            except Exception:
+                no_time_convs.append(conv)
+        
+        if not quarter_bins:
+            # If no valid timestamps, fall back to random sampling
+            return random.sample(user_conversations, sample_size), {}
+        
+        # Calculate samples per quarter for this user
+        num_bins = len(quarter_bins)
+        per_bin = sample_size // num_bins
+        remainder = sample_size % num_bins
+        
+        # Sample from each quarter
+        sampled = []
+        weights = {}
+        
+        sorted_quarters = sorted(quarter_bins.keys())
+        for i, quarter in enumerate(sorted_quarters):
+            bin_data = quarter_bins[quarter]
+            n_to_sample = per_bin + (1 if i < remainder else 0)
+            n_sampled = min(n_to_sample, len(bin_data))
+            
+            if n_sampled > 0:
+                sampled_from_bin = random.sample(bin_data, n_sampled)
+                sampled.extend(sampled_from_bin)
+                weights[quarter] = len(bin_data) / n_sampled
+        
+        logger.debug(f"User {user_id}: sampled {len(sampled)} conversations across {len(quarter_bins)} quarters")
+        
+        return sampled, weights
     
     def combine_samples(
         self,
@@ -222,25 +330,24 @@ class TwoStageSampler:
             Tuple of (combined conversations, metadata about sampling)
         """
         # Track which sample each conversation belongs to
-        temporal_ids = {conv.conversation_id for conv in temporal_sample}
-        user_ids = {conv.conversation_id for conv in user_sample}
+        temporal_ids = {id(conv) for conv in temporal_sample}
+        user_ids = {id(conv) for conv in user_sample}
         
         # Combine samples (avoiding duplicates)
         combined = temporal_sample.copy()
         seen_ids = temporal_ids.copy()
         
         for conv in user_sample:
-            if conv.conversation_id not in seen_ids:
+            if id(conv) not in seen_ids:
                 combined.append(conv)
-                seen_ids.add(conv.conversation_id)
+                seen_ids.add(id(conv))
         
         # Create metadata for each conversation
         sample_metadata = {}
         for i, conv in enumerate(combined):
-            conv_id = conv.conversation_id
+            conv_id = id(conv)
             metadata = {
                 'index': i,
-                'conv_id': conv.conversation_id,
                 'in_temporal_sample': conv_id in temporal_ids,
                 'in_user_sample': conv_id in user_ids,
                 'in_both_samples': conv_id in temporal_ids and conv_id in user_ids
@@ -305,7 +412,7 @@ def main(
         if hasattr(conv, 'user_id') and conv.user_id:
             temporal_users.add(conv.user_id)
     
-    # Stage 3: User-centric sampling
+    # Stage 3: User-centric sampling with temporal stratification
     user_sample = sampler.user_centric_sample(
         filtered_convs, n_users, prioritize_users=temporal_users
     )
@@ -373,18 +480,6 @@ def main(
 
 
 if __name__ == "__main__":
-    """
-    python sample_conversations.py \
-        --input_path data/conversations.json \
-        --output_path data/sampled_conversations.json \
-        --temporal_sample_size 4000 \
-        --n_users 100 \
-        --conversations_per_user 30 \
-        --min_conversations 10 \
-        --max_conversations 200 \
-        --seed 42
-
-    """
     parser = argparse.ArgumentParser(
         description="Two-stage scientific sampling for conversation data",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
