@@ -98,6 +98,8 @@ def main(input_fpath, output_fpath):
                     model_name = "ChatGPT"
                 elif '#FFC107' in page_source:
                     model_name = "Bard"
+                elif 'background-color: #111827' in page_source:
+                    model_name = "GPT-4"
                 else:
                     model_name = "Unknown"
 
@@ -112,9 +114,15 @@ def main(input_fpath, output_fpath):
                             prompt_text = prompt_element.text.strip()
                             conversation_data[f"Turn {index - 1}"] = prompt_text
                         except NoSuchElementException:
-                            empty_attempts += 1
-                            index += 2
-                            continue
+                            try: 
+                                prompt_xpath = f'//*[@id="root"]/div[1]/div[2]/div[1]/div[3]/div[2]/div/div/div[{index}]/div/div/div/p'
+                                prompt_element = driver.find_element(By.XPATH, prompt_xpath)
+                                prompt_text = prompt_element.text.strip()
+                                conversation_data[f"Turn {index - 1}"] = prompt_text
+                            except NoSuchElementException:
+                                empty_attempts += 1
+                                index += 2
+                                continue
 
                         # Extract Response (odd index turns)
                         response_xpath = f'//*[@id="root"]/div[1]/div[2]/div[1]/div[3]/div[2]/div[{index+1}]/div/div/div[2]/div/div/div'
@@ -122,20 +130,26 @@ def main(input_fpath, output_fpath):
                             response_element = driver.find_element(By.XPATH, response_xpath)
                             response_text = response_element.text.strip()
                             conversation_data[f"Turn {index}"] = response_text
-                        except:
+                        except NoSuchElementException:
                             try:
-                                response_xpath = f'//*[@id="root"]/div[1]/div[2]/div[1]/div[3]/div[2]/div[{index+1}]/div/div/div[2]/div/div'
+                                response_xpath = f'//*[@id="root"]/div[1]/div[2]/div[1]/div[3]/div[2]/div/div/div[{index+1}]/div/div/div[2]/div/div/div/div/div[1]'
                                 response_element = driver.find_element(By.XPATH, response_xpath)
                                 response_text = response_element.text.strip()
                                 conversation_data[f"Turn {index}"] = response_text
-                            except:
+                            except NoSuchElementException:
                                 try:
                                     response_xpath = f'//*[@id="root"]/div[1]/div[2]/div[1]/div[3]/div[2]/div[{index+1}]/div/div/div[2]/div/div'
                                     response_element = driver.find_element(By.XPATH, response_xpath)
                                     response_text = response_element.text.strip()
                                     conversation_data[f"Turn {index}"] = response_text
-                                except:
-                                    conversation_data[f"Turn {index}"] = ""
+                                except NoSuchElementException:
+                                    try:
+                                        response_xpath = f'//*[@id="root"]/div[1]/div[2]/div[1]/div[3]/div[2]/div[{index+1}]/div/div/div[2]/div/div'
+                                        response_element = driver.find_element(By.XPATH, response_xpath)
+                                        response_text = response_element.text.strip()
+                                        conversation_data[f"Turn {index}"] = response_text
+                                    except NoSuchElementException:
+                                        conversation_data[f"Turn {index}"] = ""
 
                         index += 2  # Move to the next pair
                         empty_attempts = 0
@@ -154,7 +168,7 @@ def main(input_fpath, output_fpath):
                 outfile.write(json.dumps(conversation_data, ensure_ascii=False) + "\n")
                 outfile.flush()
         
-        print(f"\nProcessing complete!")
+        print("\nProcessing complete!")
         print(f"Total new entries processed: {total_processed}")
         print(f"Total entries skipped (already processed): {total_skipped}")
     
