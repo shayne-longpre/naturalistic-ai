@@ -168,3 +168,4 @@ notebooks/.DS_Store
 .gitignore
 data/static/
 notebooks/data-slice-comparisons.ipynb
+.DS_Store
