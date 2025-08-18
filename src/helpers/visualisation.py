@@ -429,3 +429,314 @@ def plot_differences_for_group(
         for k, v in metrics.items():
             print(f"   {k}: {v}")
         print("-" * 50)
+
+
+
+def plot_stacked_area_chart(
+    data: pd.DataFrame,
+    x_col: str,
+    y_col: str, 
+    category_col: str,
+    title: str = "Temporal Shifts Over Time",
+    xlabel: str = "",
+    ylabel: str = "",
+    figsize: typing.Tuple[int, int] = (12, 8),
+    output_path: typing.Optional[str] = None,
+    color_palette: str = "tab20",
+    alpha: float = 0.8,
+    max_categories: int = 20,
+    sort_by_total: bool = True
+) -> plt.Figure:
+    """
+    Create a stacked area chart for temporal analysis.
+    
+    Args:
+        data: DataFrame with your data
+        x_col: Column name for x-axis values (e.g., "time", "date", "month")
+        y_col: Column name for y-axis values (e.g., "count", "frequency", "value")
+        category_col: Column name for categories (e.g., "topic", "function", "media_type")
+        title: Plot title
+        xlabel: Label for x-axis (if empty, uses x_col)
+        ylabel: Label for y-axis (if empty, uses y_col)
+        figsize: Figure size (width, height) in inches
+        output_path: If provided, save the figure to this path
+        color_palette: Matplotlib colormap name for category colors
+        alpha: Transparency of the areas (0-1)
+        max_categories: Maximum number of categories to display (top N by total)
+        sort_by_total: Whether to sort categories by total value across time
+    
+    Returns:
+        The Matplotlib Figure object.
+    """
+    # Create figure
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    # Use column names as default labels if not provided
+    if not xlabel:
+        xlabel = x_col
+    if not ylabel:
+        ylabel = y_col
+    
+    # Pivot data to wide format for plotting
+    pivot_data = data.pivot(index=x_col, columns=category_col, values=y_col).fillna(0)
+    
+    # Limit categories if needed
+    if len(pivot_data.columns) > max_categories:
+        if sort_by_total:
+            # Sort by total value across all time points
+            category_totals = pivot_data.sum().sort_values(ascending=False)
+            top_categories = category_totals.head(max_categories).index
+            pivot_data = pivot_data[top_categories]
+        else:
+            # Just take first max_categories
+            pivot_data = pivot_data.iloc[:, :max_categories]
+    
+    # Sort categories by total value for better visualization
+    if sort_by_total:
+        category_totals = pivot_data.sum().sort_values(ascending=False)
+        pivot_data = pivot_data[category_totals.index]
+    
+    # Create stacked area plot
+    colors = plt.cm.get_cmap(color_palette, len(pivot_data.columns))
+    ax.stackplot(pivot_data.index, pivot_data.values.T, 
+                 labels=pivot_data.columns, 
+                 colors=colors(np.arange(len(pivot_data.columns))),
+                 alpha=alpha)
+    
+    # Customize plot
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    
+    # Rotate x-axis labels if they're long
+    if len(str(pivot_data.index[0])) > 8:
+        ax.tick_params(axis='x', rotation=45)
+    
+    # Add legend
+    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
+    
+    # Add grid
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    # Adjust layout to prevent legend cutoff
+    plt.tight_layout()
+    
+    # Save the plot if an output path is provided
+    if output_path is not None:
+        fig.savefig(output_path, bbox_inches='tight', dpi=300)
+    
+    # Return the figure but prevent automatic display in Jupyter
+    plt.close(fig)
+    return fig
+
+
+def plot_temporal_analysis(
+    matrix: pd.DataFrame,
+    title: str = "Temporal Shifts Over Time",
+    figsize: typing.Tuple[int, int] = (14, 10),
+    output_path: typing.Optional[str] = None,
+    max_categories: int = 15
+) -> plt.Figure:
+    """
+    Create a stacked area chart for temporal analysis of any annotation dimension.
+    
+    Args:
+        matrix: DataFrame with categories as rows and time periods as columns
+        title: Plot title
+        figsize: Figure size (width, height) in inches
+        output_path: If provided, save the figure to this path
+        max_categories: Maximum number of categories to display (top N by total)
+    
+    Returns:
+        The Matplotlib Figure object.
+    """
+    
+    # ************* Customize the following *************
+    
+    # Convert matrix to long format for the general function
+    long_data = matrix.reset_index().melt(
+        id_vars='index',           # ← Customize if your time column isn't the index
+        var_name='time',           # ← Customize the name of your time column
+        value_name='value'         # ← Customize the name of your count/frequency column
+    )
+    long_data = long_data.rename(columns={'index': 'category'})  # ← Customize if your category column isn't the index
+    
+    # Filter to top categories by total value
+    if len(long_data['category'].unique()) > max_categories:
+        category_totals = long_data.groupby('category')['value'].sum().sort_values(ascending=False)
+        top_categories = category_totals.head(max_categories).index
+        long_data = long_data[long_data['category'].isin(top_categories)]
+    
+    # Create the stacked area chart
+    fig = plot_stacked_area_chart(
+        data=long_data,
+        x_col='time',              # ← Must match the var_name from melt()
+        y_col='value',             # ← Must match the value_name from melt()
+        category_col='category',    # ← Must match the renamed column
+        title=title,
+        xlabel='Time Period',
+        ylabel='Number of Occurrences',
+        figsize=figsize,
+        output_path=output_path,
+        max_categories=max_categories
+    )
+    
+    return fig
+
+    # ************* Customize above *************
+
+
+def plot_temporal_analysis_percentage(
+    matrix: pd.DataFrame,
+    title: str = "Temporal Shifts Over Time (Percentage)",
+    figsize: typing.Tuple[int, int] = (14, 10),
+    output_path: typing.Optional[str] = None,
+    max_categories: int = 15
+) -> plt.Figure:
+    """
+    Create a percentage-based stacked area chart for temporal analysis of any annotation dimension.
+    
+    Args:
+        matrix: DataFrame with categories as rows and time periods as columns
+        title: Plot title
+        figsize: Figure size (width, height) in inches
+        output_path: If provided, save the figure to this path
+        max_categories: Maximum number of categories to display (top N by total)
+    
+    Returns:
+        The Matplotlib Figure object.
+    """
+    # Convert matrix to long format for the general function
+    long_data = matrix.reset_index().melt(
+        id_vars='index', 
+        var_name='time', 
+        value_name='value'
+    )
+    long_data = long_data.rename(columns={'index': 'category'})
+    
+    # Filter to top categories by total value
+    if len(long_data['category'].unique()) > max_categories:
+        category_totals = long_data.groupby('category')['value'].sum().sort_values(ascending=False)
+        top_categories = category_totals.head(max_categories).index
+        long_data = long_data[long_data['category'].isin(top_categories)]
+    
+    # Create the percentage-based stacked area chart
+    fig = plot_stacked_area_chart_percentage(
+        data=long_data,
+        x_col='time',
+        y_col='value',
+        category_col='category',
+        title=title,
+        xlabel='Time Period',
+        ylabel='Percentage of Total',
+        figsize=figsize,
+        output_path=output_path,
+        max_categories=max_categories
+    )
+    
+    return fig
+
+
+def plot_stacked_area_chart_percentage(
+    data: pd.DataFrame,
+    x_col: str,
+    y_col: str, 
+    category_col: str,
+    title: str = "Temporal Shifts Over Time (Percentage)",
+    xlabel: str = "",
+    ylabel: str = "",
+    figsize: typing.Tuple[int, int] = (12, 8),
+    output_path: typing.Optional[str] = None,
+    color_palette: str = "tab20",
+    alpha: float = 0.8,
+    max_categories: int = 20,
+    sort_by_total: bool = True
+) -> plt.Figure:
+    """
+    Create a percentage-based stacked area chart for temporal analysis.
+    
+    Args:
+        data: DataFrame with your data
+        x_col: Column name for x-axis values (e.g., "time", "date", "month")
+        y_col: Column name for y-axis values (e.g., "count", "frequency", "value")
+        category_col: Column name for categories (e.g., "topic", "function", "media_type")
+        title: Plot title
+        xlabel: Label for x-axis (if empty, uses x_col)
+        ylabel: Label for y-axis (if empty, uses "Percentage")
+        figsize: Figure size (width, height) in inches
+        output_path: If provided, save the figure to this path
+        color_palette: Matplotlib colormap name for category colors
+        alpha: Transparency of the areas (0-1)
+        max_categories: Maximum number of categories to display (top N by total)
+        sort_by_total: Whether to sort categories by total value across time
+    
+    Returns:
+        The Matplotlib Figure object.
+    """
+    # Create figure
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    # Use column names as default labels if not provided
+    if not xlabel:
+        xlabel = x_col
+    if not ylabel:
+        ylabel = "Percentage"
+    
+    # Pivot data to wide format for plotting
+    pivot_data = data.pivot(index=x_col, columns=category_col, values=y_col).fillna(0)
+    
+    # Convert to percentages by dividing each column by the row sum
+    pivot_data_percentage = pivot_data.div(pivot_data.sum(axis=1), axis=0) * 100
+    
+    # Limit categories if needed
+    if len(pivot_data_percentage.columns) > max_categories:
+        if sort_by_total:
+            # Sort by total percentage across all time points
+            category_totals = pivot_data_percentage.sum().sort_values(ascending=False)
+            top_categories = category_totals.head(max_categories).index
+            pivot_data_percentage = pivot_data_percentage[top_categories]
+        else:
+            # Just take first max_categories
+            pivot_data_percentage = pivot_data_percentage.iloc[:, :max_categories]
+    
+    # Sort categories by total percentage for better visualization
+    if sort_by_total:
+        category_totals = pivot_data_percentage.sum().sort_values(ascending=False)
+        pivot_data_percentage = pivot_data_percentage[category_totals.index]
+    
+    # Create stacked area plot
+    colors = plt.cm.get_cmap(color_palette, len(pivot_data_percentage.columns))
+    ax.stackplot(pivot_data_percentage.index, pivot_data_percentage.values.T, 
+                 labels=pivot_data_percentage.columns, 
+                 colors=colors(np.arange(len(pivot_data_percentage.columns))),
+                 alpha=alpha)
+    
+    # Customize plot
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    
+    # Set y-axis to show percentages from 0-100
+    ax.set_ylim(0, 100)
+    
+    # Add percentage grid lines
+    ax.yaxis.set_major_locator(plt.MultipleLocator(10))
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    # Rotate x-axis labels if they're long
+    if len(str(pivot_data_percentage.index[0])) > 8:
+        ax.tick_params(axis='x', rotation=45)
+    
+    # Add legend
+    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
+    
+    # Adjust layout to prevent legend cutoff
+    plt.tight_layout()
+    
+    # Save the plot if an output path is provided
+    if output_path is not None:
+        fig.savefig(output_path, bbox_inches='tight', dpi=300)
+    
+    # Return the figure but prevent automatic display in Jupyter
+    plt.close(fig)
+    return fig
