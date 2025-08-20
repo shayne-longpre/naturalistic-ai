@@ -462,10 +462,16 @@ def plot_stacked_area_chart(
     line_alpha: float = 0.9,
     show_grid: bool = True,
     grid_alpha: float = 0.3,
-    font_family: str = "Arial",
-    font_size: int = 12,
+    font_family: str = "Times New Roman",
+    font_size: int = 14,
     legend_title: str = None,
-    line_legend_title: str = "Overlay Lines"
+    line_legend_title: str = "Overlay Lines",
+    # NEW: Enhanced aesthetic parameters
+    elegant_colors: bool = True,
+    smooth_areas: bool = True,
+    publication_style: bool = True,
+    area_linewidth: float = 0.0,
+    enhanced_typography: bool = True
 ) -> plt.Figure:
     """
     Create an advanced stacked area chart for temporal analysis with overlay lines and event markers.
@@ -502,13 +508,47 @@ def plot_stacked_area_chart(
         font_size: Base font size
         legend_title: Title for the stacked areas legend
         line_legend_title: Title for the overlay lines legend
+        
+        # NEW: Enhanced aesthetic parameters
+        elegant_colors: Whether to use the elegant color palette from viz_funcs.py
+        smooth_areas: Whether to render areas more smoothly (no borders)
+        publication_style: Whether to apply enhanced publication styling
+        area_linewidth: Width of area borders (0 for no borders)
+        enhanced_typography: Whether to apply enhanced typography settings
     
     Returns:
         The Matplotlib Figure object.
     """
+    # Enhanced publication styling
+    if publication_style:
+        plt.style.use('seaborn-v0_8-white')
+        # Enhanced rcParams for publication quality
+        enhanced_params = {
+            "font.family": font_family,
+            "font.size": font_size,
+            "axes.labelsize": font_size,
+            "axes.titlesize": font_size + 2,
+            "xtick.labelsize": font_size - 1,
+            "ytick.labelsize": font_size - 1,
+            "legend.fontsize": font_size - 1,
+            "axes.linewidth": 1.0,
+            "xtick.major.width": 0.8,
+            "ytick.major.width": 0.8,
+            "xtick.major.size": 6,
+            "ytick.major.size": 6,
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+            "axes.spines.left": False,
+            "axes.edgecolor": "#333333",
+            "text.color": "#333333",
+            "axes.labelcolor": "#333333",
+            "xtick.color": "#333333",
+            "ytick.color": "#333333",
+        }
+        plt.rcParams.update(enhanced_params)
+    
     # Create figure with professional styling
-    plt.style.use('seaborn-v0_8-white')
-    fig, ax = plt.subplots(figsize=figsize, dpi=100)
+    fig, ax = plt.subplots(figsize=figsize, dpi=150)  # Increased DPI for smoother rendering
     
     # Use column names as default labels if not provided
     if not xlabel:
@@ -539,32 +579,58 @@ def plot_stacked_area_chart(
         category_totals = pivot_data.sum().sort_values(ascending=False)
         pivot_data = pivot_data[category_totals.index]
     
-    # Build color palette
-    if custom_colors:
-        # Use custom colors, fallback to default for missing categories
+    # Build enhanced color palette
+    if elegant_colors and not custom_colors:
+        # Use the exact elegant palette from viz_funcs.py
+        elegant_palette = [
+            '#2E86AB',  # Steel Blue
+            '#E63946',  # Imperial Red
+            '#F77F00',  # Vivid Orange
+            '#06A77D',  # Green (Munsell)
+            '#5C415D',  # English Violet
+            '#FCBF49',  # Maize Crayola
+            '#264653',  # Charcoal
+            '#E76F51',  # Burnt Sienna
+            '#2A9D8F',  # Persian Green
+            '#F4A261',  # Sandy Brown
+        ]
+        # Cycle through the palette for all categories
+        colors = [elegant_palette[i % len(elegant_palette)] for i in range(len(pivot_data.columns))]
+    elif custom_colors:
+        # Use custom colors, fallback to elegant palette for missing categories
         colors = []
         for cat in pivot_data.columns:
             if cat in custom_colors:
                 colors.append(custom_colors[cat])
             else:
-                # Generate a color from the palette
-                cmap = plt.cm.get_cmap(color_palette)
-                colors.append(cmap(len(colors) % cmap.N))
+                # Fallback to elegant palette
+                elegant_palette = ['#2E86AB', '#E63946', '#F77F00', '#06A77D', '#5C415D']
+                colors.append(elegant_palette[len(colors) % len(elegant_palette)])
     else:
         # Generate colors from palette
         cmap = plt.cm.get_cmap(color_palette, len(pivot_data.columns))
         colors = [cmap(i) for i in range(len(pivot_data.columns))]
     
-    # Create stacked area plot
-    ax.stackplot(pivot_data.index, pivot_data.values.T, 
-                 labels=pivot_data.columns, 
-                 colors=colors,
-                 alpha=alpha)
+    # Create stacked area plot with enhanced rendering
+    if smooth_areas:
+        # Smooth areas with no borders and slightly higher alpha
+        ax.stackplot(pivot_data.index, pivot_data.values.T, 
+                     labels=pivot_data.columns, 
+                     colors=colors,
+                     alpha=min(alpha + 0.05, 0.95),  # Slightly more opaque for elegance
+                     linewidth=area_linewidth)
+    else:
+        # Standard rendering
+        ax.stackplot(pivot_data.index, pivot_data.values.T, 
+                     labels=pivot_data.columns, 
+                     colors=colors,
+                     alpha=alpha,
+                     linewidth=area_linewidth)
     
     # Add overlay lines if specified
     if overlay_lines:
-        # Default line colors (complementary to area colors)
-        default_line_colors = ['#6b46c1', '#ec4899', '#f59e0b', '#10b981', '#6366f1']
+        # Enhanced line colors (complementary to area colors)
+        enhanced_line_colors = ['#6b46c1', '#ec4899', '#f59e0b', '#10b981', '#6366f1']
         
         for i, (line_name, line_df) in enumerate(overlay_lines.items()):
             # Get line style if provided
@@ -574,21 +640,23 @@ def plot_stacked_area_chart(
             if 'color' in line_style:
                 line_color = line_style['color']
             else:
-                line_color = default_line_colors[i % len(default_line_colors)]
+                line_color = enhanced_line_colors[i % len(enhanced_line_colors)]
             
             # Determine line style
             line_dash = line_style.get('linestyle', '-')
             
-            # Plot the line
+            # Plot the line with enhanced styling
             ax.plot(line_df[x_col], line_df[y_col], 
                    label=f"{line_name} (line)",
                    color=line_color,
                    linestyle=line_dash,
                    linewidth=line_width,
                    alpha=line_alpha,
-                   zorder=10)  # Ensure lines are above areas
+                   zorder=10,  # Ensure lines are above areas
+                   solid_capstyle='round',  # Rounded line caps
+                   solid_joinstyle='round')  # Rounded line joins
     
-    # Add vertical event lines
+    # Add vertical event lines with enhanced styling
     if vertical_line_dates:
         for event_info in vertical_line_dates:
             if len(event_info) == 2:
@@ -613,41 +681,51 @@ def plot_stacked_area_chart(
                 # For numeric x-axis
                 x_pos = event_date
             
-            # Draw vertical line
+            # Draw vertical line with enhanced styling
             ax.axvline(x=x_pos, color=color, linestyle=vertical_line_style, 
                       linewidth=vertical_line_width, alpha=0.7, zorder=5)
             
-            # Add text label
+            # Add text label with enhanced styling
             y_max = pivot_data.sum(axis=1).max()
             ax.text(x_pos, y_max * 0.95, label, 
                    rotation=90, verticalalignment='top',
                    fontsize=font_size-2, color=color, alpha=0.8,
-                   bbox=dict(boxstyle="round,pad=0.3", facecolor='white', 
-                            edgecolor='none', alpha=0.7))
+                   fontfamily=font_family,
+                   bbox=dict(boxstyle="round,pad=0.4", facecolor='white', 
+                            edgecolor='none', alpha=0.8))
     
-    # Customize plot
-    ax.set_xlabel(xlabel, fontsize=font_size, fontfamily=font_family)
-    ax.set_ylabel(ylabel, fontsize=font_size, fontfamily=font_family)
-    ax.set_title(title, fontsize=font_size+2, fontfamily=font_family, weight='bold')
+    # Enhanced plot customization
+    if enhanced_typography:
+        ax.set_xlabel(xlabel, fontsize=font_size, fontfamily=font_family, weight='medium')
+        ax.set_ylabel(ylabel, fontsize=font_size, fontfamily=font_family, weight='medium')
+        ax.set_title(title, fontsize=font_size+2, fontfamily=font_family, weight='bold', pad=20)
+    else:
+        ax.set_xlabel(xlabel, fontsize=font_size, fontfamily=font_family)
+        ax.set_ylabel(ylabel, fontsize=font_size, fontfamily=font_family)
+        ax.set_title(title, fontsize=font_size+2, fontfamily=font_family, weight='bold')
     
     # Rotate x-axis labels if they're long
     if len(str(pivot_data.index[0])) > 8:
         ax.tick_params(axis='x', rotation=45)
     
-    # Configure grid
+    # Enhanced grid configuration
     if show_grid:
-        ax.grid(True, alpha=grid_alpha, linestyle='--', zorder=1)
+        ax.grid(True, alpha=grid_alpha, linestyle='--', linewidth=0.5, color='#CCCCCC', zorder=1)
+        ax.set_axisbelow(True)
     
-    # Configure legends
+    # Enhanced legend configuration
     legend_title = legend_title or category_col.title()
     
-    # Main legend for stacked areas
+    # Main legend for stacked areas with enhanced styling
     main_legend = ax.legend(title=legend_title, 
                            bbox_to_anchor=(1.05, 1), 
                            loc='upper left', 
                            borderaxespad=0.,
                            fontsize=font_size-1,
-                           title_fontsize=font_size)
+                           title_fontsize=font_size,
+                           frameon=False,  # No legend frame for cleaner look
+                           handlelength=2,
+                           handletextpad=0.5)
     
     # Add overlay lines legend if they exist
     if overlay_lines:
@@ -669,20 +747,19 @@ def plot_stacked_area_chart(
                                   loc='center left',
                                   borderaxespad=0.,
                                   fontsize=font_size-1,
-                                  title_fontsize=font_size)
+                                  title_fontsize=font_size,
+                                  frameon=False)
             ax.add_artist(main_legend)  # Add main legend back
     
-    # Style configuration
-    ax.tick_params(axis='both', labelsize=font_size-1)
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+    # Enhanced style configuration
+    ax.tick_params(axis='both', labelsize=font_size-1, direction='out', length=6)
     
     # Adjust layout to prevent legend cutoff
     plt.tight_layout()
     
     # Save the plot if an output path is provided
     if output_path is not None:
-        fig.savefig(output_path, bbox_inches='tight', dpi=300)
+        fig.savefig(output_path, bbox_inches='tight', dpi=300, facecolor='white', edgecolor='none')
     
     # Return the figure but prevent automatic display in Jupyter
     plt.close(fig)
@@ -823,10 +900,16 @@ def plot_stacked_area_chart_percentage(
     line_alpha: float = 0.9,
     show_grid: bool = True,
     grid_alpha: float = 0.3,
-    font_family: str = "Arial",
-    font_size: int = 12,
+    font_family: str = "Times New Roman",
+    font_size: int = 14,
     legend_title: str = None,
-    line_legend_title: str = "Overlay Lines"
+    line_legend_title: str = "Overlay Lines",
+    # NEW: Enhanced aesthetic parameters
+    elegant_colors: bool = True,
+    smooth_areas: bool = True,
+    publication_style: bool = True,
+    area_linewidth: float = 0.0,
+    enhanced_typography: bool = True
 ) -> plt.Figure:
     """
     Create an advanced percentage-based stacked area chart for temporal analysis with overlay lines and event markers.
@@ -863,13 +946,47 @@ def plot_stacked_area_chart_percentage(
         font_size: Base font size
         legend_title: Title for the stacked areas legend
         line_legend_title: Title for the overlay lines legend
+        
+        # NEW: Enhanced aesthetic parameters
+        elegant_colors: Whether to use the elegant color palette from viz_funcs.py
+        smooth_areas: Whether to render areas more smoothly (no borders)
+        publication_style: Whether to apply enhanced publication styling
+        area_linewidth: Width of area borders (0 for no borders)
+        enhanced_typography: Whether to apply enhanced typography settings
     
     Returns:
         The Matplotlib Figure object.
     """
+    # Enhanced publication styling
+    if publication_style:
+        plt.style.use('seaborn-v0_8-white')
+        # Enhanced rcParams for publication quality
+        enhanced_params = {
+            "font.family": font_family,
+            "font.size": font_size,
+            "axes.labelsize": font_size,
+            "axes.titlesize": font_size + 2,
+            "xtick.labelsize": font_size - 1,
+            "ytick.labelsize": font_size - 1,
+            "legend.fontsize": font_size - 1,
+            "axes.linewidth": 1.0,
+            "xtick.major.width": 0.8,
+            "ytick.major.width": 0.8,
+            "xtick.major.size": 6,
+            "ytick.major.size": 6,
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+            "axes.spines.left": False,
+            "axes.edgecolor": "#333333",
+            "text.color": "#333333",
+            "axes.labelcolor": "#333333",
+            "xtick.color": "#333333",
+            "ytick.color": "#333333",
+        }
+        plt.rcParams.update(enhanced_params)
+    
     # Create figure with professional styling
-    plt.style.use('seaborn-v0_8-white')
-    fig, ax = plt.subplots(figsize=figsize, dpi=100)
+    fig, ax = plt.subplots(figsize=figsize, dpi=150)  # Increased DPI for smoother rendering
     
     # Use column names as default labels if not provided
     if not xlabel:
@@ -903,32 +1020,58 @@ def plot_stacked_area_chart_percentage(
         category_totals = pivot_data_percentage.sum().sort_values(ascending=False)
         pivot_data_percentage = pivot_data_percentage[category_totals.index]
     
-    # Build color palette
-    if custom_colors:
-        # Use custom colors, fallback to default for missing categories
+    # Build enhanced color palette
+    if elegant_colors and not custom_colors:
+        # Use the exact elegant palette from viz_funcs.py
+        elegant_palette = [
+            '#2E86AB',  # Steel Blue
+            '#E63946',  # Imperial Red
+            '#F77F00',  # Vivid Orange
+            '#06A77D',  # Green (Munsell)
+            '#5C415D',  # English Violet
+            '#FCBF49',  # Maize Crayola
+            '#264653',  # Charcoal
+            '#E76F51',  # Burnt Sienna
+            '#2A9D8F',  # Persian Green
+            '#F4A261',  # Sandy Brown
+        ]
+        # Cycle through the palette for all categories
+        colors = [elegant_palette[i % len(elegant_palette)] for i in range(len(pivot_data_percentage.columns))]
+    elif custom_colors:
+        # Use custom colors, fallback to elegant palette for missing categories
         colors = []
         for cat in pivot_data_percentage.columns:
             if cat in custom_colors:
                 colors.append(custom_colors[cat])
             else:
-                # Generate a color from the palette
-                cmap = plt.cm.get_cmap(color_palette)
-                colors.append(cmap(len(colors) % cmap.N))
+                # Fallback to elegant palette
+                elegant_palette = ['#2E86AB', '#E63946', '#F77F00', '#06A77D', '#5C415D']
+                colors.append(elegant_palette[len(colors) % len(elegant_palette)])
     else:
         # Generate colors from palette
         cmap = plt.cm.get_cmap(color_palette, len(pivot_data_percentage.columns))
         colors = [cmap(i) for i in range(len(pivot_data_percentage.columns))]
     
-    # Create stacked area plot
-    ax.stackplot(pivot_data_percentage.index, pivot_data_percentage.values.T, 
-                 labels=pivot_data_percentage.columns, 
-                 colors=colors,
-                 alpha=alpha)
+    # Create stacked area plot with enhanced rendering
+    if smooth_areas:
+        # Smooth areas with no borders and slightly higher alpha
+        ax.stackplot(pivot_data_percentage.index, pivot_data_percentage.values.T, 
+                     labels=pivot_data_percentage.columns, 
+                     colors=colors,
+                     alpha=min(alpha + 0.05, 0.95),  # Slightly more opaque for elegance
+                     linewidth=area_linewidth)
+    else:
+        # Standard rendering
+        ax.stackplot(pivot_data_percentage.index, pivot_data_percentage.values.T, 
+                     labels=pivot_data_percentage.columns, 
+                     colors=colors,
+                     alpha=alpha,
+                     linewidth=area_linewidth)
     
     # Add overlay lines if specified
     if overlay_lines:
-        # Default line colors (complementary to area colors)
-        default_line_colors = ['#6b46c1', '#ec4899', '#f59e0b', '#10b981', '#6366f1']
+        # Enhanced line colors (complementary to area colors)
+        enhanced_line_colors = ['#6b46c1', '#ec4899', '#f59e0b', '#10b981', '#6366f1']
         
         for i, (line_name, line_df) in enumerate(overlay_lines.items()):
             # Get line style if provided
@@ -938,21 +1081,23 @@ def plot_stacked_area_chart_percentage(
             if 'color' in line_style:
                 line_color = line_style['color']
             else:
-                line_color = default_line_colors[i % len(default_line_colors)]
+                line_color = enhanced_line_colors[i % len(enhanced_line_colors)]
             
             # Determine line style
             line_dash = line_style.get('linestyle', '-')
             
-            # Plot the line
+            # Plot the line with enhanced styling
             ax.plot(line_df[x_col], line_df[y_col], 
                    label=f"{line_name} (line)",
                    color=line_color,
                    linestyle=line_dash,
                    linewidth=line_width,
                    alpha=line_alpha,
-                   zorder=10)  # Ensure lines are above areas
+                   zorder=10,  # Ensure lines are above areas
+                   solid_capstyle='round',  # Rounded line caps
+                   solid_joinstyle='round')  # Rounded line joins
     
-    # Add vertical event lines
+    # Add vertical event lines with enhanced styling
     if vertical_line_dates:
         for event_info in vertical_line_dates:
             if len(event_info) == 2:
@@ -977,46 +1122,56 @@ def plot_stacked_area_chart_percentage(
                 # For numeric x-axis
                 x_pos = event_date
             
-            # Draw vertical line
+            # Draw vertical line with enhanced styling
             ax.axvline(x=x_pos, color=color, linestyle=vertical_line_style, 
                       linewidth=vertical_line_width, alpha=0.7, zorder=5)
             
-            # Add text label
+            # Add text label with enhanced styling
             ax.text(x_pos, 95, label, 
                    rotation=90, verticalalignment='top',
                    fontsize=font_size-2, color=color, alpha=0.8,
-                   bbox=dict(boxstyle="round,pad=0.3", facecolor='white', 
-                            edgecolor='none', alpha=0.7))
+                   fontfamily=font_family,
+                   bbox=dict(boxstyle="round,pad=0.4", facecolor='white', 
+                            edgecolor='none', alpha=0.8))
     
-    # Customize plot
-    ax.set_xlabel(xlabel, fontsize=font_size, fontfamily=font_family)
-    ax.set_ylabel(ylabel, fontsize=font_size, fontfamily=font_family)
-    ax.set_title(title, fontsize=font_size+2, fontfamily=font_family, weight='bold')
+    # Enhanced plot customization
+    if enhanced_typography:
+        ax.set_xlabel(xlabel, fontsize=font_size, fontfamily=font_family, weight='medium')
+        ax.set_ylabel(ylabel, fontsize=font_size, fontfamily=font_family, weight='medium')
+        ax.set_title(title, fontsize=font_size+2, fontfamily=font_family, weight='bold', pad=20)
+    else:
+        ax.set_xlabel(xlabel, fontsize=font_size, fontfamily=font_family)
+        ax.set_ylabel(ylabel, fontsize=font_size, fontfamily=font_family)
+        ax.set_title(title, fontsize=font_size+2, fontfamily=font_family, weight='bold')
     
     # Set y-axis to show percentages from 0-100
     ax.set_ylim(0, 100)
     
-    # Add percentage grid lines
+    # Enhanced percentage grid lines
     ax.yaxis.set_major_locator(plt.MultipleLocator(10))
     
     # Rotate x-axis labels if they're long
     if len(str(pivot_data_percentage.index[0])) > 8:
         ax.tick_params(axis='x', rotation=45)
     
-    # Configure grid
+    # Enhanced grid configuration
     if show_grid:
-        ax.grid(True, alpha=grid_alpha, linestyle='--', zorder=1)
+        ax.grid(True, alpha=grid_alpha, linestyle='--', linewidth=0.5, color='#CCCCCC', zorder=1)
+        ax.set_axisbelow(True)
     
-    # Configure legends
+    # Enhanced legend configuration
     legend_title = legend_title or category_col.title()
     
-    # Main legend for stacked areas
+    # Main legend for stacked areas with enhanced styling
     main_legend = ax.legend(title=legend_title, 
                            bbox_to_anchor=(1.05, 1), 
                            loc='upper left', 
                            borderaxespad=0.,
                            fontsize=font_size-1,
-                           title_fontsize=font_size)
+                           title_fontsize=font_size,
+                           frameon=False,  # No legend frame for cleaner look
+                           handlelength=2,
+                           handletextpad=0.5)
     
     # Add overlay lines legend if they exist
     if overlay_lines:
@@ -1038,20 +1193,19 @@ def plot_stacked_area_chart_percentage(
                                   loc='center left',
                                   borderaxespad=0.,
                                   fontsize=font_size-1,
-                                  title_fontsize=font_size)
+                                  title_fontsize=font_size,
+                                  frameon=False)
             ax.add_artist(main_legend)  # Add main legend back
     
-    # Style configuration
-    ax.tick_params(axis='both', labelsize=font_size-1)
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+    # Enhanced style configuration
+    ax.tick_params(axis='both', labelsize=font_size-1, direction='out', length=6)
     
     # Adjust layout to prevent legend cutoff
     plt.tight_layout()
     
     # Save the plot if an output path is provided
     if output_path is not None:
-        fig.savefig(output_path, bbox_inches='tight', dpi=300)
+        fig.savefig(output_path, bbox_inches='tight', dpi=300, facecolor='white', edgecolor='none')
     
     # Return the figure but prevent automatic display in Jupyter
     plt.close(fig)
@@ -1081,9 +1235,14 @@ def plot_temporal_curves(
     vertical_line_style: str = "--",
     vertical_line_width: float = 1.0,
     vertical_line_alpha: float = 0.7,
-    font_family: str = "Arial",
+    font_family: str = "Times New Roman",
     font_size: int = 14,
-    savepath: str = None
+    savepath: str = None,
+    # NEW: Enhanced aesthetic parameters
+    elegant_colors: bool = True,
+    smooth_lines: bool = True,
+    publication_style: bool = True,
+    enhanced_typography: bool = True
 ) -> plt.Figure:
     """
     Create publication-quality temporal curve plots with multiple groups.
@@ -1114,6 +1273,12 @@ def plot_temporal_curves(
         font_family: Font family for all text elements
         font_size: Base font size
         savepath: Alternative output path (for compatibility)
+        
+        # NEW: Enhanced aesthetic parameters
+        elegant_colors: Whether to use the elegant color palette from viz_funcs.py
+        smooth_lines: Whether to render lines more smoothly with rounded caps/joins
+        publication_style: Whether to apply enhanced publication styling
+        enhanced_typography: Whether to apply enhanced typography settings
     
     Returns:
         The Matplotlib Figure object.
@@ -1127,8 +1292,9 @@ def plot_temporal_curves(
     if not ylabel:
         ylabel = y_col
     
-    # Define a professional color palette
-    if palette is None:
+    # Define enhanced color palette
+    if elegant_colors and palette is None:
+        # Use the exact elegant palette from viz_funcs.py
         palette = [
             '#2E86AB',  # Steel Blue
             '#E63946',  # Imperial Red
@@ -1141,37 +1307,44 @@ def plot_temporal_curves(
             '#2A9D8F',  # Persian Green
             '#F4A261',  # Sandy Brown
         ]
+    elif palette is None:
+        # Fallback to scientific palette
+        palette = [
+            '#2E86AB', '#E63946', '#F77F00', '#06A77D', '#5C415D',
+            '#FCBF49', '#264653', '#E76F51', '#2A9D8F', '#F4A261'
+        ]
     
-    # Style configuration
-    plt.style.use('seaborn-v0_8-white')
+    # Enhanced style configuration
+    if publication_style:
+        plt.style.use('seaborn-v0_8-white')
+        
+        base_params = {
+            "font.family": font_family,
+            "font.size": font_size,
+            "axes.labelsize": font_size,
+            "axes.titlesize": font_size + 2,
+            "xtick.labelsize": font_size - 1,
+            "ytick.labelsize": font_size - 1,
+            "legend.fontsize": font_size - 1,
+            "axes.linewidth": 1.0,
+            "xtick.major.width": 0.8,
+            "ytick.major.width": 0.8,
+            "xtick.major.size": 6,
+            "ytick.major.size": 6,
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+            "axes.spines.left": False,
+            "axes.edgecolor": "#333333",
+            "text.color": "#333333",
+            "axes.labelcolor": "#333333",
+            "xtick.color": "#333333",
+            "ytick.color": "#333333",
+        }
+        
+        plt.rcParams.update(base_params)
     
-    base_params = {
-        "font.family": font_family,
-        "font.size": font_size,
-        "axes.labelsize": font_size,
-        "axes.titlesize": font_size + 2,
-        "xtick.labelsize": font_size - 1,
-        "ytick.labelsize": font_size - 1,
-        "legend.fontsize": font_size - 1,
-        "axes.linewidth": 1.5,
-        "xtick.major.width": 1.2,
-        "ytick.major.width": 1.2,
-        "xtick.major.size": 6,
-        "ytick.major.size": 6,
-        "axes.spines.top": False,
-        "axes.spines.right": False,
-        "axes.spines.left": False,
-        "axes.edgecolor": "#333333",
-        "text.color": "#333333",
-        "axes.labelcolor": "#333333",
-        "xtick.color": "#333333",
-        "ytick.color": "#333333",
-    }
-    
-    plt.rcParams.update(base_params)
-    
-    # Create figure and axes
-    fig, ax = plt.subplots(figsize=figsize, dpi=100)
+    # Create figure and axes with enhanced DPI
+    fig, ax = plt.subplots(figsize=figsize, dpi=150)
     
     # Prepare data and plot lines
     groups = data[group_col].dropna().unique()
@@ -1191,16 +1364,29 @@ def plot_temporal_curves(
         else:
             x_numeric = pd.to_datetime(x_values)
         
-        line = ax.plot(
-            x_numeric,
-            subset[y_col],
-            label=str(grp),
-            color=colour,
-            linewidth=linewidth,
-            alpha=alpha,
-            solid_capstyle='round',
-            solid_joinstyle='round',
-        )[0]
+        # Enhanced line plotting with smooth rendering
+        if smooth_lines:
+            line = ax.plot(
+                x_numeric,
+                subset[y_col],
+                label=str(grp),
+                color=colour,
+                linewidth=linewidth,
+                alpha=alpha,
+                solid_capstyle='round',
+                solid_joinstyle='round',
+                zorder=5  # Ensure lines are above grid
+            )[0]
+        else:
+            line = ax.plot(
+                x_numeric,
+                subset[y_col],
+                label=str(grp),
+                color=colour,
+                linewidth=linewidth,
+                alpha=alpha,
+                zorder=5
+            )[0]
         
         # Store endpoint for inline labels
         if len(subset) > 0 and legend_style == "inline":
@@ -1214,7 +1400,7 @@ def plot_temporal_curves(
             label_text = f"{pct_str} {str(grp)}"
             line_endpoints.append((last_x, last_y, label_text, colour))
     
-    # Add vertical lines if specified
+    # Add vertical lines if specified with enhanced styling
     if vertical_lines:
         # Get y-axis limits for text positioning
         y_min, y_max = ax.get_ylim()
@@ -1233,7 +1419,7 @@ def plot_temporal_curves(
                 except:
                     x_pos = datetime_val
             
-            # Draw vertical line
+            # Draw vertical line with enhanced styling
             ax.axvline(
                 x=x_pos,
                 color=vertical_line_color,
@@ -1243,7 +1429,7 @@ def plot_temporal_curves(
                 zorder=1
             )
             
-            # Add text label
+            # Add text label with enhanced styling
             ax.text(
                 x_pos,
                 text_y,
@@ -1255,15 +1441,16 @@ def plot_temporal_curves(
                 color=vertical_line_color,
                 alpha=vertical_line_alpha + 0.2,
                 weight='medium',
+                fontfamily=font_family,
                 bbox=dict(
-                    boxstyle="round,pad=0.3",
+                    boxstyle="round,pad=0.4",
                     facecolor='white',
                     edgecolor='none',
-                    alpha=0.7
+                    alpha=0.8
                 )
             )
     
-    # Format axes
+    # Enhanced axis formatting
     # X-axis: Year only for datetime
     if pd.api.types.is_datetime64_any_dtype(data[x_col]) or \
        all(pd.to_datetime(data[x_col], errors='coerce').notna()):
@@ -1276,21 +1463,25 @@ def plot_temporal_curves(
     elif y_format == "number":
         ax.yaxis.set_major_formatter(FuncFormatter(lambda y, p: f'{y:,.0f}'))
     
-    # Remove axis labels (as requested for journal style)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
+    # Enhanced axis labels
+    if enhanced_typography:
+        ax.set_xlabel(xlabel, fontsize=font_size, fontfamily=font_family, weight='medium')
+        ax.set_ylabel(ylabel, fontsize=font_size, fontfamily=font_family, weight='medium')
+    else:
+        ax.set_xlabel(xlabel, fontsize=font_size, fontfamily=font_family)
+        ax.set_ylabel(ylabel, fontsize=font_size, fontfamily=font_family)
     
-    # Grid styling
+    # Enhanced grid styling
     if show_grid:
         ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5, color='#CCCCCC')
         ax.set_axisbelow(True)
     else:
         ax.grid(False)
     
-    # Legend configuration
+    # Enhanced legend configuration
     if show_legend:
         if legend_style == "box":
-            # Traditional legend box
+            # Traditional legend box with enhanced styling
             legend = ax.legend(
                 loc=legend_loc,
                 frameon=False,
@@ -1298,6 +1489,7 @@ def plot_temporal_curves(
                 handletextpad=0.5,
                 columnspacing=1,
                 borderaxespad=0.5,
+                fontfamily=font_family
             )
             # Make legend lines slightly thicker for visibility
             for line in legend.get_lines():
@@ -1344,13 +1536,17 @@ def plot_temporal_curves(
                     va='center',
                     ha='left',
                     weight='medium',
+                    fontfamily=font_family
                 )
     
-    # Title
+    # Enhanced title
     if title:
-        ax.set_title(title, pad=20, weight='bold')
+        if enhanced_typography:
+            ax.set_title(title, pad=20, weight='bold', fontfamily=font_family)
+        else:
+            ax.set_title(title, pad=20, weight='bold')
     
-    # Final adjustments
+    # Enhanced final adjustments
     # Style the tick marks to only appear on bottom and left
     ax.tick_params(axis='x', which='both', bottom=True, top=False, direction='out', length=6)
     ax.tick_params(axis='y', which='both', left=True, right=False, direction='out', length=6)
@@ -1370,9 +1566,9 @@ def plot_temporal_curves(
     # Tighten layout
     plt.tight_layout()
     
-    # Save the plot if an output path is provided
+    # Enhanced save with better quality
     if final_output_path is not None:
-        fig.savefig(final_output_path, dpi=300, bbox_inches='tight')
+        fig.savefig(final_output_path, dpi=300, bbox_inches='tight', facecolor='white', edgecolor='none')
     
     # Return the figure but prevent automatic display in Jupyter
     plt.close(fig)
