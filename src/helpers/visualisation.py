@@ -8,6 +8,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from tabulate import tabulate
 from collections import Counter, defaultdict
+import matplotlib.dates
+from matplotlib.ticker import FuncFormatter
+from datetime import datetime
 
 sys.path.append("./")
 
@@ -445,10 +448,27 @@ def plot_stacked_area_chart(
     color_palette: str = "tab20",
     alpha: float = 0.8,
     max_categories: int = 20,
-    sort_by_total: bool = True
+    sort_by_total: bool = True,
+    # New advanced features from viz_funcs.py
+    category_order: typing.List[str] = None,
+    custom_colors: typing.Dict[str, str] = None,
+    overlay_lines: typing.Dict[str, pd.DataFrame] = None,
+    overlay_line_styles: typing.Dict[str, typing.Dict[str, typing.Any]] = None,
+    vertical_line_dates: typing.List[typing.Tuple[str, str, str]] = [],
+    vertical_line_color: str = "#666666",
+    vertical_line_width: float = 2.0,
+    vertical_line_style: str = "--",
+    line_width: float = 3.0,
+    line_alpha: float = 0.9,
+    show_grid: bool = True,
+    grid_alpha: float = 0.3,
+    font_family: str = "Arial",
+    font_size: int = 12,
+    legend_title: str = None,
+    line_legend_title: str = "Overlay Lines"
 ) -> plt.Figure:
     """
-    Create a stacked area chart for temporal analysis.
+    Create an advanced stacked area chart for temporal analysis with overlay lines and event markers.
     
     Args:
         data: DataFrame with your data
@@ -464,12 +484,31 @@ def plot_stacked_area_chart(
         alpha: Transparency of the areas (0-1)
         max_categories: Maximum number of categories to display (top N by total)
         sort_by_total: Whether to sort categories by total value across time
+        
+        # Advanced features
+        category_order: Custom order for stacking categories (bottom to top)
+        custom_colors: Dictionary mapping category names to hex colors
+        overlay_lines: Dictionary mapping line names to DataFrames with line data
+        overlay_line_styles: Dictionary mapping line names to style properties
+        vertical_line_dates: List of (date, label, color) tuples for event markers
+        vertical_line_color: Default color for vertical lines
+        vertical_line_width: Width of vertical lines
+        vertical_line_style: Style of vertical lines ("-", "--", "-.", ":")
+        line_width: Width of overlay lines
+        line_alpha: Transparency of overlay lines
+        show_grid: Whether to show grid lines
+        grid_alpha: Transparency of grid lines
+        font_family: Font family for all text elements
+        font_size: Base font size
+        legend_title: Title for the stacked areas legend
+        line_legend_title: Title for the overlay lines legend
     
     Returns:
         The Matplotlib Figure object.
     """
-    # Create figure
-    fig, ax = plt.subplots(figsize=figsize)
+    # Create figure with professional styling
+    plt.style.use('seaborn-v0_8-white')
+    fig, ax = plt.subplots(figsize=figsize, dpi=100)
     
     # Use column names as default labels if not provided
     if not xlabel:
@@ -480,8 +519,12 @@ def plot_stacked_area_chart(
     # Pivot data to wide format for plotting
     pivot_data = data.pivot(index=x_col, columns=category_col, values=y_col).fillna(0)
     
-    # Limit categories if needed
-    if len(pivot_data.columns) > max_categories:
+    # Handle category ordering and limiting
+    if category_order:
+        # Use provided order, filtering to available categories
+        available_categories = [cat for cat in category_order if cat in pivot_data.columns]
+        pivot_data = pivot_data[available_categories]
+    elif len(pivot_data.columns) > max_categories:
         if sort_by_total:
             # Sort by total value across all time points
             category_totals = pivot_data.sum().sort_values(ascending=False)
@@ -491,32 +534,148 @@ def plot_stacked_area_chart(
             # Just take first max_categories
             pivot_data = pivot_data.iloc[:, :max_categories]
     
-    # Sort categories by total value for better visualization
-    if sort_by_total:
+    # Sort categories by total value for better visualization (if no custom order)
+    if not category_order and sort_by_total:
         category_totals = pivot_data.sum().sort_values(ascending=False)
         pivot_data = pivot_data[category_totals.index]
     
+    # Build color palette
+    if custom_colors:
+        # Use custom colors, fallback to default for missing categories
+        colors = []
+        for cat in pivot_data.columns:
+            if cat in custom_colors:
+                colors.append(custom_colors[cat])
+            else:
+                # Generate a color from the palette
+                cmap = plt.cm.get_cmap(color_palette)
+                colors.append(cmap(len(colors) % cmap.N))
+    else:
+        # Generate colors from palette
+        cmap = plt.cm.get_cmap(color_palette, len(pivot_data.columns))
+        colors = [cmap(i) for i in range(len(pivot_data.columns))]
+    
     # Create stacked area plot
-    colors = plt.cm.get_cmap(color_palette, len(pivot_data.columns))
     ax.stackplot(pivot_data.index, pivot_data.values.T, 
                  labels=pivot_data.columns, 
-                 colors=colors(np.arange(len(pivot_data.columns))),
+                 colors=colors,
                  alpha=alpha)
     
+    # Add overlay lines if specified
+    if overlay_lines:
+        # Default line colors (complementary to area colors)
+        default_line_colors = ['#6b46c1', '#ec4899', '#f59e0b', '#10b981', '#6366f1']
+        
+        for i, (line_name, line_df) in enumerate(overlay_lines.items()):
+            # Get line style if provided
+            line_style = overlay_line_styles.get(line_name, {}) if overlay_line_styles else {}
+            
+            # Determine color
+            if 'color' in line_style:
+                line_color = line_style['color']
+            else:
+                line_color = default_line_colors[i % len(default_line_colors)]
+            
+            # Determine line style
+            line_dash = line_style.get('linestyle', '-')
+            
+            # Plot the line
+            ax.plot(line_df[x_col], line_df[y_col], 
+                   label=f"{line_name} (line)",
+                   color=line_color,
+                   linestyle=line_dash,
+                   linewidth=line_width,
+                   alpha=line_alpha,
+                   zorder=10)  # Ensure lines are above areas
+    
+    # Add vertical event lines
+    if vertical_line_dates:
+        for event_info in vertical_line_dates:
+            if len(event_info) == 2:
+                date_str, label = event_info
+                color = vertical_line_color
+            else:
+                date_str, label, color = event_info
+            
+            # Convert date string to datetime if needed
+            if isinstance(date_str, str):
+                event_date = pd.to_datetime(date_str)
+            else:
+                event_date = date_str
+            
+            # Find closest x-value in the data
+            x_values = pivot_data.index
+            if hasattr(x_values, 'dtype') and pd.api.types.is_datetime64_any_dtype(x_values):
+                # For datetime x-axis
+                closest_idx = (x_values - event_date).abs().idxmin()
+                x_pos = closest_idx
+            else:
+                # For numeric x-axis
+                x_pos = event_date
+            
+            # Draw vertical line
+            ax.axvline(x=x_pos, color=color, linestyle=vertical_line_style, 
+                      linewidth=vertical_line_width, alpha=0.7, zorder=5)
+            
+            # Add text label
+            y_max = pivot_data.sum(axis=1).max()
+            ax.text(x_pos, y_max * 0.95, label, 
+                   rotation=90, verticalalignment='top',
+                   fontsize=font_size-2, color=color, alpha=0.8,
+                   bbox=dict(boxstyle="round,pad=0.3", facecolor='white', 
+                            edgecolor='none', alpha=0.7))
+    
     # Customize plot
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
+    ax.set_xlabel(xlabel, fontsize=font_size, fontfamily=font_family)
+    ax.set_ylabel(ylabel, fontsize=font_size, fontfamily=font_family)
+    ax.set_title(title, fontsize=font_size+2, fontfamily=font_family, weight='bold')
     
     # Rotate x-axis labels if they're long
     if len(str(pivot_data.index[0])) > 8:
         ax.tick_params(axis='x', rotation=45)
     
-    # Add legend
-    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
+    # Configure grid
+    if show_grid:
+        ax.grid(True, alpha=grid_alpha, linestyle='--', zorder=1)
     
-    # Add grid
-    ax.grid(True, alpha=0.3, linestyle='--')
+    # Configure legends
+    legend_title = legend_title or category_col.title()
+    
+    # Main legend for stacked areas
+    main_legend = ax.legend(title=legend_title, 
+                           bbox_to_anchor=(1.05, 1), 
+                           loc='upper left', 
+                           borderaxespad=0.,
+                           fontsize=font_size-1,
+                           title_fontsize=font_size)
+    
+    # Add overlay lines legend if they exist
+    if overlay_lines:
+        # Create a second legend for lines
+        line_handles = []
+        line_labels = []
+        for line_name in overlay_lines.keys():
+            # Find the line in the plot
+            for line in ax.lines:
+                if line.get_label() == f"{line_name} (line)":
+                    line_handles.append(line)
+                    line_labels.append(line_name)
+                    break
+        
+        if line_handles:
+            line_legend = ax.legend(line_handles, line_labels, 
+                                  title=line_legend_title,
+                                  bbox_to_anchor=(1.05, 0.5), 
+                                  loc='center left',
+                                  borderaxespad=0.,
+                                  fontsize=font_size-1,
+                                  title_fontsize=font_size)
+            ax.add_artist(main_legend)  # Add main legend back
+    
+    # Style configuration
+    ax.tick_params(axis='both', labelsize=font_size-1)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
     
     # Adjust layout to prevent legend cutoff
     plt.tight_layout()
@@ -650,10 +809,27 @@ def plot_stacked_area_chart_percentage(
     color_palette: str = "tab20",
     alpha: float = 0.8,
     max_categories: int = 20,
-    sort_by_total: bool = True
+    sort_by_total: bool = True,
+    # New advanced features from viz_funcs.py
+    category_order: typing.List[str] = None,
+    custom_colors: typing.Dict[str, str] = None,
+    overlay_lines: typing.Dict[str, pd.DataFrame] = None,
+    overlay_line_styles: typing.Dict[str, typing.Dict[str, typing.Any]] = None,
+    vertical_line_dates: typing.List[typing.Tuple[str, str, str]] = [],
+    vertical_line_color: str = "#666666",
+    vertical_line_width: float = 2.0,
+    vertical_line_style: str = "--",
+    line_width: float = 3.0,
+    line_alpha: float = 0.9,
+    show_grid: bool = True,
+    grid_alpha: float = 0.3,
+    font_family: str = "Arial",
+    font_size: int = 12,
+    legend_title: str = None,
+    line_legend_title: str = "Overlay Lines"
 ) -> plt.Figure:
     """
-    Create a percentage-based stacked area chart for temporal analysis.
+    Create an advanced percentage-based stacked area chart for temporal analysis with overlay lines and event markers.
     
     Args:
         data: DataFrame with your data
@@ -669,12 +845,31 @@ def plot_stacked_area_chart_percentage(
         alpha: Transparency of the areas (0-1)
         max_categories: Maximum number of categories to display (top N by total)
         sort_by_total: Whether to sort categories by total value across time
+        
+        # Advanced features
+        category_order: Custom order for stacking categories (bottom to top)
+        custom_colors: Dictionary mapping category names to hex colors
+        overlay_lines: Dictionary mapping line names to DataFrames with line data
+        overlay_line_styles: Dictionary mapping line names to style properties
+        vertical_line_dates: List of (date, label, color) tuples for event markers
+        vertical_line_color: Default color for vertical lines
+        vertical_line_width: Width of vertical lines
+        vertical_line_style: Style of vertical lines ("-", "--", "-.", ":")
+        line_width: Width of overlay lines
+        line_alpha: Transparency of overlay lines
+        show_grid: Whether to show grid lines
+        grid_alpha: Transparency of grid lines
+        font_family: Font family for all text elements
+        font_size: Base font size
+        legend_title: Title for the stacked areas legend
+        line_legend_title: Title for the overlay lines legend
     
     Returns:
         The Matplotlib Figure object.
     """
-    # Create figure
-    fig, ax = plt.subplots(figsize=figsize)
+    # Create figure with professional styling
+    plt.style.use('seaborn-v0_8-white')
+    fig, ax = plt.subplots(figsize=figsize, dpi=100)
     
     # Use column names as default labels if not provided
     if not xlabel:
@@ -688,8 +883,12 @@ def plot_stacked_area_chart_percentage(
     # Convert to percentages by dividing each column by the row sum
     pivot_data_percentage = pivot_data.div(pivot_data.sum(axis=1), axis=0) * 100
     
-    # Limit categories if needed
-    if len(pivot_data_percentage.columns) > max_categories:
+    # Handle category ordering and limiting
+    if category_order:
+        # Use provided order, filtering to available categories
+        available_categories = [cat for cat in category_order if cat in pivot_data_percentage.columns]
+        pivot_data_percentage = pivot_data_percentage[available_categories]
+    elif len(pivot_data_percentage.columns) > max_categories:
         if sort_by_total:
             # Sort by total percentage across all time points
             category_totals = pivot_data_percentage.sum().sort_values(ascending=False)
@@ -699,36 +898,153 @@ def plot_stacked_area_chart_percentage(
             # Just take first max_categories
             pivot_data_percentage = pivot_data_percentage.iloc[:, :max_categories]
     
-    # Sort categories by total percentage for better visualization
-    if sort_by_total:
+    # Sort categories by total percentage for better visualization (if no custom order)
+    if not category_order and sort_by_total:
         category_totals = pivot_data_percentage.sum().sort_values(ascending=False)
         pivot_data_percentage = pivot_data_percentage[category_totals.index]
     
+    # Build color palette
+    if custom_colors:
+        # Use custom colors, fallback to default for missing categories
+        colors = []
+        for cat in pivot_data_percentage.columns:
+            if cat in custom_colors:
+                colors.append(custom_colors[cat])
+            else:
+                # Generate a color from the palette
+                cmap = plt.cm.get_cmap(color_palette)
+                colors.append(cmap(len(colors) % cmap.N))
+    else:
+        # Generate colors from palette
+        cmap = plt.cm.get_cmap(color_palette, len(pivot_data_percentage.columns))
+        colors = [cmap(i) for i in range(len(pivot_data_percentage.columns))]
+    
     # Create stacked area plot
-    colors = plt.cm.get_cmap(color_palette, len(pivot_data_percentage.columns))
     ax.stackplot(pivot_data_percentage.index, pivot_data_percentage.values.T, 
                  labels=pivot_data_percentage.columns, 
-                 colors=colors(np.arange(len(pivot_data_percentage.columns))),
+                 colors=colors,
                  alpha=alpha)
     
+    # Add overlay lines if specified
+    if overlay_lines:
+        # Default line colors (complementary to area colors)
+        default_line_colors = ['#6b46c1', '#ec4899', '#f59e0b', '#10b981', '#6366f1']
+        
+        for i, (line_name, line_df) in enumerate(overlay_lines.items()):
+            # Get line style if provided
+            line_style = overlay_line_styles.get(line_name, {}) if overlay_line_styles else {}
+            
+            # Determine color
+            if 'color' in line_style:
+                line_color = line_style['color']
+            else:
+                line_color = default_line_colors[i % len(default_line_colors)]
+            
+            # Determine line style
+            line_dash = line_style.get('linestyle', '-')
+            
+            # Plot the line
+            ax.plot(line_df[x_col], line_df[y_col], 
+                   label=f"{line_name} (line)",
+                   color=line_color,
+                   linestyle=line_dash,
+                   linewidth=line_width,
+                   alpha=line_alpha,
+                   zorder=10)  # Ensure lines are above areas
+    
+    # Add vertical event lines
+    if vertical_line_dates:
+        for event_info in vertical_line_dates:
+            if len(event_info) == 2:
+                date_str, label = event_info
+                color = vertical_line_color
+            else:
+                date_str, label, color = event_info
+            
+            # Convert date string to datetime if needed
+            if isinstance(date_str, str):
+                event_date = pd.to_datetime(date_str)
+            else:
+                event_date = date_str
+            
+            # Find closest x-value in the data
+            x_values = pivot_data_percentage.index
+            if hasattr(x_values, 'dtype') and pd.api.types.is_datetime64_any_dtype(x_values):
+                # For datetime x-axis
+                closest_idx = (x_values - event_date).abs().idxmin()
+                x_pos = closest_idx
+            else:
+                # For numeric x-axis
+                x_pos = event_date
+            
+            # Draw vertical line
+            ax.axvline(x=x_pos, color=color, linestyle=vertical_line_style, 
+                      linewidth=vertical_line_width, alpha=0.7, zorder=5)
+            
+            # Add text label
+            ax.text(x_pos, 95, label, 
+                   rotation=90, verticalalignment='top',
+                   fontsize=font_size-2, color=color, alpha=0.8,
+                   bbox=dict(boxstyle="round,pad=0.3", facecolor='white', 
+                            edgecolor='none', alpha=0.7))
+    
     # Customize plot
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
+    ax.set_xlabel(xlabel, fontsize=font_size, fontfamily=font_family)
+    ax.set_ylabel(ylabel, fontsize=font_size, fontfamily=font_family)
+    ax.set_title(title, fontsize=font_size+2, fontfamily=font_family, weight='bold')
     
     # Set y-axis to show percentages from 0-100
     ax.set_ylim(0, 100)
     
     # Add percentage grid lines
     ax.yaxis.set_major_locator(plt.MultipleLocator(10))
-    ax.grid(True, alpha=0.3, linestyle='--')
     
     # Rotate x-axis labels if they're long
     if len(str(pivot_data_percentage.index[0])) > 8:
         ax.tick_params(axis='x', rotation=45)
     
-    # Add legend
-    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
+    # Configure grid
+    if show_grid:
+        ax.grid(True, alpha=grid_alpha, linestyle='--', zorder=1)
+    
+    # Configure legends
+    legend_title = legend_title or category_col.title()
+    
+    # Main legend for stacked areas
+    main_legend = ax.legend(title=legend_title, 
+                           bbox_to_anchor=(1.05, 1), 
+                           loc='upper left', 
+                           borderaxespad=0.,
+                           fontsize=font_size-1,
+                           title_fontsize=font_size)
+    
+    # Add overlay lines legend if they exist
+    if overlay_lines:
+        # Create a second legend for lines
+        line_handles = []
+        line_labels = []
+        for line_name in overlay_lines.keys():
+            # Find the line in the plot
+            for line in ax.lines:
+                if line.get_label() == f"{line_name} (line)":
+                    line_handles.append(line)
+                    line_labels.append(line_name)
+                    break
+        
+        if line_handles:
+            line_legend = ax.legend(line_handles, line_labels, 
+                                  title=line_legend_title,
+                                  bbox_to_anchor=(1.05, 0.5), 
+                                  loc='center left',
+                                  borderaxespad=0.,
+                                  fontsize=font_size-1,
+                                  title_fontsize=font_size)
+            ax.add_artist(main_legend)  # Add main legend back
+    
+    # Style configuration
+    ax.tick_params(axis='both', labelsize=font_size-1)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
     
     # Adjust layout to prevent legend cutoff
     plt.tight_layout()
@@ -736,6 +1052,327 @@ def plot_stacked_area_chart_percentage(
     # Save the plot if an output path is provided
     if output_path is not None:
         fig.savefig(output_path, bbox_inches='tight', dpi=300)
+    
+    # Return the figure but prevent automatic display in Jupyter
+    plt.close(fig)
+    return fig
+
+
+def plot_temporal_curves(
+    data: pd.DataFrame,
+    x_col: str,
+    y_col: str,
+    group_col: str,
+    title: str = "Temporal Trends Over Time",
+    xlabel: str = "",
+    ylabel: str = "",
+    figsize: typing.Tuple[int, int] = (12, 6),
+    output_path: typing.Optional[str] = None,
+    palette: typing.Sequence[str] = None,
+    linewidth: float = 2.5,
+    alpha: float = 0.9,
+    show_legend: bool = True,
+    legend_style: str = "box",  # "box" or "inline"
+    legend_loc: str = "best",
+    y_format: str = "auto",  # "auto", "percent", "number"
+    show_grid: bool = False,
+    vertical_lines: typing.Dict[str, typing.Union[str, datetime]] = None,
+    vertical_line_color: str = "black",
+    vertical_line_style: str = "--",
+    vertical_line_width: float = 1.0,
+    vertical_line_alpha: float = 0.7,
+    font_family: str = "Arial",
+    font_size: int = 14,
+    savepath: str = None
+) -> plt.Figure:
+    """
+    Create publication-quality temporal curve plots with multiple groups.
+    
+    Args:
+        data: DataFrame with your data
+        x_col: Column name for x-axis values (e.g., "time", "date", "month")
+        y_col: Column name for y-axis values (e.g., "count", "frequency", "value")
+        group_col: Column name for grouping different lines
+        title: Plot title
+        xlabel: Label for x-axis (if empty, uses x_col)
+        ylabel: Label for y-axis (if empty, uses y_col)
+        figsize: Figure size (width, height) in inches
+        output_path: If provided, save the figure to this path
+        palette: Custom color palette; defaults to a scientific palette
+        linewidth: Width of each line
+        alpha: Line transparency
+        show_legend: Whether to show the legend
+        legend_style: "box" for traditional legend, "inline" for labels at line ends
+        legend_loc: Legend location (only used if legend_style="box")
+        y_format: Format for y-axis: "auto", "percent", or "number"
+        show_grid: Whether to show grid lines
+        vertical_lines: Dictionary mapping names to datetimes for vertical reference lines
+        vertical_line_color: Color of vertical lines
+        vertical_line_style: Line style for vertical lines ("-", "--", "-.", ":")
+        vertical_line_width: Width of vertical lines
+        vertical_line_alpha: Transparency of vertical lines
+        font_family: Font family for all text elements
+        font_size: Base font size
+        savepath: Alternative output path (for compatibility)
+    
+    Returns:
+        The Matplotlib Figure object.
+    """
+    # Use savepath if provided, otherwise use output_path
+    final_output_path = savepath if savepath else output_path
+    
+    # Use column names as default labels if not provided
+    if not xlabel:
+        xlabel = x_col
+    if not ylabel:
+        ylabel = y_col
+    
+    # Define a professional color palette
+    if palette is None:
+        palette = [
+            '#2E86AB',  # Steel Blue
+            '#E63946',  # Imperial Red
+            '#F77F00',  # Vivid Orange
+            '#06A77D',  # Green (Munsell)
+            '#5C415D',  # English Violet
+            '#FCBF49',  # Maize Crayola
+            '#264653',  # Charcoal
+            '#E76F51',  # Burnt Sienna
+            '#2A9D8F',  # Persian Green
+            '#F4A261',  # Sandy Brown
+        ]
+    
+    # Style configuration
+    plt.style.use('seaborn-v0_8-white')
+    
+    base_params = {
+        "font.family": font_family,
+        "font.size": font_size,
+        "axes.labelsize": font_size,
+        "axes.titlesize": font_size + 2,
+        "xtick.labelsize": font_size - 1,
+        "ytick.labelsize": font_size - 1,
+        "legend.fontsize": font_size - 1,
+        "axes.linewidth": 1.5,
+        "xtick.major.width": 1.2,
+        "ytick.major.width": 1.2,
+        "xtick.major.size": 6,
+        "ytick.major.size": 6,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "axes.spines.left": False,
+        "axes.edgecolor": "#333333",
+        "text.color": "#333333",
+        "axes.labelcolor": "#333333",
+        "xtick.color": "#333333",
+        "ytick.color": "#333333",
+    }
+    
+    plt.rcParams.update(base_params)
+    
+    # Create figure and axes
+    fig, ax = plt.subplots(figsize=figsize, dpi=100)
+    
+    # Prepare data and plot lines
+    groups = data[group_col].dropna().unique()
+    colour_cycle = palette * (len(groups) // len(palette) + 1)
+    
+    # Store line endpoints for inline labels
+    line_endpoints = []
+    
+    for colour, grp in zip(colour_cycle, sorted(groups)):
+        subset = data[data[group_col] == grp].copy()
+        subset = subset.sort_values(x_col)
+        
+        # Handle datetime x-axis
+        x_values = subset[x_col]
+        if pd.api.types.is_datetime64_any_dtype(x_values):
+            x_numeric = x_values
+        else:
+            x_numeric = pd.to_datetime(x_values)
+        
+        line = ax.plot(
+            x_numeric,
+            subset[y_col],
+            label=str(grp),
+            color=colour,
+            linewidth=linewidth,
+            alpha=alpha,
+            solid_capstyle='round',
+            solid_joinstyle='round',
+        )[0]
+        
+        # Store endpoint for inline labels
+        if len(subset) > 0 and legend_style == "inline":
+            last_x = x_numeric.iloc[-1]
+            last_y = subset[y_col].iloc[-1]
+            # Format percentage for label
+            if y_format == "percent" or (y_format == "auto" and data[y_col].max() <= 1.0):
+                pct_str = f"({last_y*100:.1f}%)"
+            else:
+                pct_str = f"({last_y:,.1f})"
+            label_text = f"{pct_str} {str(grp)}"
+            line_endpoints.append((last_x, last_y, label_text, colour))
+    
+    # Add vertical lines if specified
+    if vertical_lines:
+        # Get y-axis limits for text positioning
+        y_min, y_max = ax.get_ylim()
+        y_range = y_max - y_min
+        text_y = y_max - (0.02 * y_range)  # Position text near top
+        
+        for name, datetime_val in vertical_lines.items():
+            # Convert datetime to matplotlib date number if needed
+            if isinstance(datetime_val, (pd.Timestamp, datetime)):
+                x_pos = matplotlib.dates.date2num(datetime_val)
+            else:
+                # Try to convert to datetime if it's a string
+                try:
+                    datetime_val = pd.to_datetime(datetime_val)
+                    x_pos = matplotlib.dates.date2num(datetime_val)
+                except:
+                    x_pos = datetime_val
+            
+            # Draw vertical line
+            ax.axvline(
+                x=x_pos,
+                color=vertical_line_color,
+                linestyle=vertical_line_style,
+                linewidth=vertical_line_width,
+                alpha=vertical_line_alpha,
+                zorder=1
+            )
+            
+            # Add text label
+            ax.text(
+                x_pos,
+                text_y,
+                name,
+                rotation=0,
+                verticalalignment='bottom',
+                horizontalalignment='center',
+                fontsize=font_size - 2,
+                color=vertical_line_color,
+                alpha=vertical_line_alpha + 0.2,
+                weight='medium',
+                bbox=dict(
+                    boxstyle="round,pad=0.3",
+                    facecolor='white',
+                    edgecolor='none',
+                    alpha=0.7
+                )
+            )
+    
+    # Format axes
+    # X-axis: Year only for datetime
+    if pd.api.types.is_datetime64_any_dtype(data[x_col]) or \
+       all(pd.to_datetime(data[x_col], errors='coerce').notna()):
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda x, p: f"{pd.Timestamp(matplotlib.dates.num2date(x)).year}"))
+        ax.xaxis.set_major_locator(matplotlib.dates.YearLocator())
+    
+    # Y-axis: Percentage or number formatting
+    if y_format == "percent" or (y_format == "auto" and data[y_col].max() <= 1.0):
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda y, p: f'{y*100:.0f}%'))
+    elif y_format == "number":
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda y, p: f'{y:,.0f}'))
+    
+    # Remove axis labels (as requested for journal style)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    
+    # Grid styling
+    if show_grid:
+        ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5, color='#CCCCCC')
+        ax.set_axisbelow(True)
+    else:
+        ax.grid(False)
+    
+    # Legend configuration
+    if show_legend:
+        if legend_style == "box":
+            # Traditional legend box
+            legend = ax.legend(
+                loc=legend_loc,
+                frameon=False,
+                handlelength=2,
+                handletextpad=0.5,
+                columnspacing=1,
+                borderaxespad=0.5,
+            )
+            # Make legend lines slightly thicker for visibility
+            for line in legend.get_lines():
+                line.set_linewidth(linewidth * 1.2)
+        
+        elif legend_style == "inline":
+            # Add labels at the end of each line
+            ax.legend().set_visible(False)
+            
+            # Sort endpoints by y-position to avoid overlaps
+            line_endpoints.sort(key=lambda x: x[1], reverse=True)
+            
+            # Adjust positions to avoid overlaps
+            y_positions = [ep[1] for ep in line_endpoints]
+            # Simple overlap avoidance
+            adjusted_positions = []
+            for i, y_pos in enumerate(y_positions):
+                if i > 0 and abs(y_pos - adjusted_positions[-1]) < y_range * 0.05:
+                    # Move this label up a bit
+                    adjusted_positions.append(adjusted_positions[-1] + y_range * 0.05)
+                else:
+                    adjusted_positions.append(y_pos)
+            
+            for i, (x, y, label, color) in enumerate(line_endpoints):
+                # Add some padding to the right
+                x_lim = ax.get_xlim()
+                x_range = x_lim[1] - x_lim[0]
+                x_offset = 0.02 * x_range
+                
+                # Convert x to matplotlib's numeric format if it's a timestamp
+                if isinstance(x, (pd.Timestamp, datetime)):
+                    x_numeric = matplotlib.dates.date2num(x)
+                else:
+                    x_numeric = x
+                
+                x_pos = x_numeric + x_offset
+                
+                ax.text(
+                    x_pos,
+                    adjusted_positions[i],
+                    label,
+                    color=color,
+                    fontsize=font_size - 1,
+                    va='center',
+                    ha='left',
+                    weight='medium',
+                )
+    
+    # Title
+    if title:
+        ax.set_title(title, pad=20, weight='bold')
+    
+    # Final adjustments
+    # Style the tick marks to only appear on bottom and left
+    ax.tick_params(axis='x', which='both', bottom=True, top=False, direction='out', length=6)
+    ax.tick_params(axis='y', which='both', left=True, right=False, direction='out', length=6)
+    
+    # Ensure y-axis ticks are visible even without left spine
+    ax.yaxis.set_ticks_position('left')
+    
+    # Extend x-axis slightly to accommodate inline labels
+    if legend_style == "inline":
+        x_min, x_max = ax.get_xlim()
+        x_range = x_max - x_min
+        ax.set_xlim(x_min, x_max + 0.15 * x_range)
+    
+    # Remove the gap at the start of x-axis
+    ax.margins(x=0.01)
+    
+    # Tighten layout
+    plt.tight_layout()
+    
+    # Save the plot if an output path is provided
+    if final_output_path is not None:
+        fig.savefig(final_output_path, dpi=300, bbox_inches='tight')
     
     # Return the figure but prevent automatic display in Jupyter
     plt.close(fig)
