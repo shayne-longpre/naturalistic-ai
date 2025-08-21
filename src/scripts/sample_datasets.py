@@ -413,7 +413,7 @@ def main(
             temporal_users.add(conv.user_id)
     
     # Stage 3: User-centric sampling with temporal stratification
-    user_sample = sampler.user_centric_sample(
+    user_sample, _ = sampler.user_centric_sample(
         filtered_convs, n_users, prioritize_users=temporal_users
     )
     
@@ -422,7 +422,7 @@ def main(
     
     # Save sampled dataset
     output_dict = {
-        'dataset_id': dataset['dataset_id'],
+        'dataset_id': combined_sample[0].dataset_id,  #dataset['dataset_id'],
         'data': [conv.to_dict() for conv in combined_sample]
     }
     

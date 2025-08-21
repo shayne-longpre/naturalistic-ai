@@ -106,7 +106,7 @@ def download_wildchat_private(sample=None):
         ]
 
         return Conversation(
-            conversation_id="wildchat_" + datum.get('conversation_hash'),
+            conversation_id="wildchat_" + str(datum.get('conversation')[0]['turn_identifier']),
             dataset_id="wildchat_1m_full",
             user_id=datum.get('hashed_ip'),
             time=timestamp.isoformat() if isinstance(timestamp, datetime) else None,
@@ -116,8 +116,9 @@ def download_wildchat_private(sample=None):
         )
 
     processed_data = [process_data(datum) for datum in tqdm(dset, desc="Processing WildChat Full")]
-    dataset = Dataset(dataset_id="wildchat_1m_full", data=processed_data)
-    return dataset
+    #dataset = Dataset(dataset_id="wildchat_1m_full", data=processed_data)
+    #return dataset
+    return processed_data
 
 
 # Download ShareGPT
