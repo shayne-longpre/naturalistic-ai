@@ -7,6 +7,10 @@ sys.path.append("./")
 
 from src.helpers import io
 
+def char_count(s):
+    return len(s)
+
+
 def read_json(json_file):
     # create file if not exists
     if not os.path.exists(json_file):
