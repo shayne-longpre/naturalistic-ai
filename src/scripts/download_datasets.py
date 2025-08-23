@@ -252,7 +252,7 @@ def download_arena_human_preference_140k():
             conversation_a = Conversation(
                 conversation_id="arena_human_pref_" + str(datum.get('id', uuid.uuid4())).replace("-", "_") + "_a",
                 dataset_id="arena_human_preference_140k",
-                user_id=datum.get('user_id', str(uuid.uuid4())),
+                user_id=None,
                 time=datum.get('timestamp').isoformat() if datum.get('timestamp') and isinstance(datum.get('timestamp'), datetime) else None,
                 model=datum.get('model_a'),
                 conversation=conv_a,
@@ -274,7 +274,7 @@ def download_arena_human_preference_140k():
             conversation_b = Conversation(
                 conversation_id="arena_human_pref_" + str(datum.get('id', uuid.uuid4())).replace("-", "_") + "_b",
                 dataset_id="arena_human_preference_140k",
-                user_id=datum.get('user_id', str(uuid.uuid4())),
+                user_id=None,
                 time=datum.get('timestamp').isoformat() if datum.get('timestamp') and isinstance(datum.get('timestamp'), datetime) else None,
                 model=datum.get('model_b'),
                 conversation=conv_b,
@@ -296,7 +296,7 @@ def download_arena_human_preference_140k():
             conversation = Conversation(
                 conversation_id="arena_human_pref_" + str(datum.get('id', uuid.uuid4())).replace("-", "_"),
                 dataset_id="arena_human_preference_140k",
-                user_id=datum.get('user_id', str(uuid.uuid4())),
+                user_id=None,
                 time=datum.get('timestamp').isoformat() if datum.get('timestamp') and isinstance(datum.get('timestamp'), datetime) else None,
                 model=datum.get('model'),
                 conversation=conv,

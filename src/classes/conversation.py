@@ -45,8 +45,9 @@ class Conversation(object):
                 for m in conversation
             ]
         else:
-            assert isinstance(self.convseration[0], Message)
             self.conversation = conversation
+            assert isinstance(self.conversation[0], Message)
+            
         self.geography = geography
         self.metadata = metadata
 

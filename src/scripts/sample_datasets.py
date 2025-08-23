@@ -65,7 +65,7 @@ class TwoStageSampler:
         # Count conversations per user
         user_counts = defaultdict(int)
         for conv in conversations:
-            if hasattr(conv, 'user_id') and conv.user_id:
+            if hasattr(conv, 'user_id') and conv.user_id is not None:
                 user_counts[conv.user_id] += 1
         
         # Filter users within bounds
@@ -76,11 +76,11 @@ class TwoStageSampler:
         
         logger.info(f"Total users: {len(user_counts)}")
         logger.info(f"Users within bounds ({self.min_conversations}-{self.max_conversations} conversations): {len(valid_users)}")
-        
+            
         # Filter conversations
         filtered_conversations = [
             conv for conv in conversations
-            if hasattr(conv, 'user_id') and conv.user_id in valid_users
+            if (hasattr(conv, 'user_id') and conv.user_id in valid_users) or (len(user_counts) == 0)
         ]
         
         logger.info(f"Conversations after user filtering: {len(filtered_conversations)} (from {len(conversations)})")
@@ -115,6 +115,13 @@ class TwoStageSampler:
             try:
                 if hasattr(conv, 'time') and conv.time:
                     dt = parse_date(conv.time) if isinstance(conv.time, str) else conv.time
+                    if isinstance(dt, datetime):
+                        bin_key = self.get_month_bin(dt)
+                        month_bins[bin_key].append(conv)
+                    else:
+                        no_time_convs.append(conv)
+                elif hasattr(conv.conversation[0], 'timestamp') and conv.conversation[0].timestamp:
+                    dt = parse_date(conv.conversation[0].timestamp) if isinstance(conv.conversation[0].timestamp, str) else conv.conversation[0].timestamp
                     if isinstance(dt, datetime):
                         bin_key = self.get_month_bin(dt)
                         month_bins[bin_key].append(conv)
@@ -402,6 +409,7 @@ def main(
     )
     
     # Stage 1: Filter users
+    user_data_exists = hasattr(dataset.data[0], 'user_id') and dataset.data[0].user_id
     filtered_convs, user_counts = sampler.filter_users_by_conversation_count(dataset.data)
     
     # Stage 2: Temporal stratified sampling
@@ -502,7 +510,7 @@ if __name__ == "__main__":
                        help='Size of temporal stratified sample')
     parser.add_argument('--n_users', type=int, default=100,
                        help='Number of users to sample for user-centric analysis')
-    parser.add_argument('--conversations_per_user', type=int, default=30,
+    parser.add_argument('--conversations_per_user', type=int, default=50,
                        help='Maximum conversations to sample per user')
     
     # User filtering parameters
