@@ -378,13 +378,15 @@ def main(
     conversations_per_user: int,
     min_conversations: int,
     max_conversations: int,
+    user_temporal_sampling: bool,
     seed: int
 ):
     """Main sampling pipeline."""
     logger.info("Starting two-stage sampling process")
     logger.info(f"Parameters: temporal_sample_size={temporal_sample_size}, n_users={n_users}, "
                 f"conversations_per_user={conversations_per_user}, "
-                f"user_bounds=({min_conversations}, {max_conversations})")
+                f"user_bounds=({min_conversations}, {max_conversations}), "
+                f"user_temporal_sampling={user_temporal_sampling}")
     
     # Load dataset
     dataset = Dataset.load(input_path)
@@ -395,6 +397,7 @@ def main(
         min_conversations=min_conversations,
         max_conversations=max_conversations,
         conversations_per_user=conversations_per_user,
+        user_temporal_sampling=user_temporal_sampling,
         seed=seed
     )
     
@@ -412,8 +415,8 @@ def main(
         if hasattr(conv, 'user_id') and conv.user_id:
             temporal_users.add(conv.user_id)
     
-    # Stage 3: User-centric sampling with temporal stratification
-    user_sample, _ = sampler.user_centric_sample(
+    # Stage 3: User-centric sampling with optional temporal stratification
+    user_sample, user_temporal_weights = sampler.user_centric_sample(
         filtered_convs, n_users, prioritize_users=temporal_users
     )
     
@@ -422,7 +425,7 @@ def main(
     
     # Save sampled dataset
     output_dict = {
-        'dataset_id': combined_sample[0].dataset_id,  #dataset['dataset_id'],
+        'dataset_id': dataset.dataset_id if hasattr(dataset, 'dataset_id') else dataset.get('dataset_id'),
         'data': [conv.to_dict() for conv in combined_sample]
     }
     
@@ -440,6 +443,7 @@ def main(
             'conversations_per_user': conversations_per_user,
             'min_conversations_per_user': min_conversations,
             'max_conversations_per_user': max_conversations,
+            'user_temporal_sampling': user_temporal_sampling,
             'seed': seed
         },
         'sampling_statistics': {
@@ -457,6 +461,7 @@ def main(
                                            if hasattr(conv, 'user_id') and conv.user_id))
         },
         'temporal_weights': temporal_weights,
+        'user_temporal_weights': user_temporal_weights,
         'conversation_metadata': sample_metadata
     }
     
@@ -476,6 +481,7 @@ def main(
     print(f"User sample: {len(user_sample)}")
     print(f"Combined sample: {len(combined_sample)}")
     print(f"Overlap: {metadata['sampling_statistics']['overlap_size']}")
+    print(f"User temporal sampling: {'Enabled' if user_temporal_sampling else 'Disabled'}")
     print("="*50 + "\n")
 
 
@@ -505,6 +511,12 @@ if __name__ == "__main__":
     parser.add_argument('--max_conversations', type=int, default=200,
                        help='Maximum conversations per user to include')
     
+    # User temporal sampling toggle
+    parser.add_argument('--user_temporal_sampling', action='store_true', default=True,
+                       help='Enable temporal stratified sampling within each user\'s conversations (default: True)')
+    parser.add_argument('--no_user_temporal_sampling', dest='user_temporal_sampling', action='store_false',
+                       help='Disable temporal stratified sampling within each user\'s conversations (use random sampling instead)')
+    
     # Other parameters
     parser.add_argument('--seed', type=int, default=42,
                        help='Random seed for reproducibility')
@@ -519,5 +531,6 @@ if __name__ == "__main__":
         conversations_per_user=args.conversations_per_user,
         min_conversations=args.min_conversations,
         max_conversations=args.max_conversations,
+        user_temporal_sampling=args.user_temporal_sampling,
         seed=args.seed
     )
