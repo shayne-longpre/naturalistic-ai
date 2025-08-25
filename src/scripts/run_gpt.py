@@ -258,6 +258,9 @@ def extract_samples_and_metadata(args, dataframe, existing_pairs):
         conversation = row["conversation"]
         ex_id_base = row["ex_id"]
 
+        if len(conversation) > 20:
+            conversation = conversation[:20]
+
         if args.multi_hist:
             if args.input_format.lower() == "json":
                 formatted_pairs = format_conversation_turns_json_multi_hist(conversation, args)
