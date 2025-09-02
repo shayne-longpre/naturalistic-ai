@@ -174,7 +174,6 @@ def run_simple_annotations(args, verbose = True):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=str, required=True, help="Path to the input json file (original dataset).")
-    parser.add_argument("--input_format", type=str, required=True, default=None)
     parser.add_argument("--save", type=str, required=True, help="Save path (will be adapted with the feature name).")
     args = parser.parse_args()
 
