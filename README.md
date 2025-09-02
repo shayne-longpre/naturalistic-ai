@@ -43,6 +43,21 @@ The `run_gpt.sh` script supports various arguments:
 
 The current `run_gpt.sh` has sample commands for running **1)** Media format (prompt level), **2)** Answer form (response level), and **3)** Topic (turn level) for test json file in `data/static/test_cedric.json` using GPTo3-mini.
 
+### Run Simple Annotations 
+
+The simple annotations include annotations for the text length, word count, character count, token count, and language detection via [Lingua](https://github.com/pemistahl/lingua-py). Running the simple annotation pipeline requires 2 steps: 
+
+1. Find the path to a json file of your examples to annotate, as with the GPT annotations above. 
+
+2. Run the script with the following arguments:
+
+```
+python run_simple_annotations.py \
+  --input path/to/input.json \
+  --save path/to/output/annotations_folder      <-this is a folder, not a file! A file will be created for each feature. 
+```
+
+Each output file will be a json file with the same IDs as your input file. For the language annotation, the annotation will be a list of all languages found in the text through the Lingua library. For specific details / choices on language identification, see the documentation for the language prediction function [here](https://github.com/shayne-longpre/naturalistic-ai/blob/d2150b3b07946c8e826a45e46939e6af829d57e4/src/scripts/run_simple_annotations.py#L54). For all other annotations, the annotation will be a string of the annotation measure. 
 
 ### Run Evaluations
 
