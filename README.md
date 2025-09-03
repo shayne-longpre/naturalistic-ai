@@ -16,7 +16,7 @@ pip install -r requirements.txt
 # If necessary:
 huggingface-cli login
 
-python src/scripts/load_datasets.py --dataset wildchat_v1 --save data/wildchat_v1_sample.csv --sample 100
+python src/scripts/download_datasets.py --dataset wildchat_v1 --save data/wildchat_v1_sample.csv --sample 100
 ```
 
 ### Run GPT Annotations

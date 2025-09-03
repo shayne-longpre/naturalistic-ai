@@ -22,7 +22,7 @@ class Conversation(object):
         metadata={},
     ):
         assert "-" not in conversation_id, \
-            f"Please do not include '-' in the conversation_id, as we use this character for joining/splitting keys."
+            f"Please do not include '-' in the conversation_id, as we use this character for joining/splitting keys. ID is {conversation_id}"
         self.conversation_id = conversation_id
         self.dataset_id = dataset_id
         self.user_id = user_id
@@ -45,8 +45,9 @@ class Conversation(object):
                 for m in conversation
             ]
         else:
-            assert isinstance(self.convseration[0], Message)
             self.conversation = conversation
+            assert isinstance(self.conversation[0], Message)
+            
         self.geography = geography
         self.metadata = metadata
 

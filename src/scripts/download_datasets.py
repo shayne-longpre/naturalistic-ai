@@ -14,7 +14,7 @@ sys.path.append("./")
 from src.classes.conversation import Conversation
 from src.classes.dataset import Dataset
 
-from helpers import io
+from src.helpers import io
 import uuid
 
 """
@@ -87,7 +87,8 @@ def download_wildchat_v1():
 # Download WildChat (private repo)
 def download_wildchat_private(sample=None):
     print("Starting Download for Yuntian's WildChat-1M-Full...")
-    dset = io.huggingface_download("yuntian-deng/WildChat-1M-Full-with-parameters-internal", split="train", sample=sample)
+    # dset = io.huggingface_download("yuntian-deng/WildChat-1M-Full-with-parameters-internal", split="train", sample=sample)
+    dset = io.huggingface_download("yuntian-deng/WildChat-4.8M-Processed-Internal", split="train", sample=sample)
 
     def process_data(datum):
         state = datum.get('state')
@@ -105,7 +106,7 @@ def download_wildchat_private(sample=None):
         ]
 
         return Conversation(
-            conversation_id="wildchat_" + datum.get('conversation_hash'),
+            conversation_id="wildchat_" + str(datum.get('conversation')[0]['turn_identifier']),
             dataset_id="wildchat_1m_full",
             user_id=datum.get('hashed_ip'),
             time=timestamp.isoformat() if isinstance(timestamp, datetime) else None,
@@ -115,8 +116,9 @@ def download_wildchat_private(sample=None):
         )
 
     processed_data = [process_data(datum) for datum in tqdm(dset, desc="Processing WildChat Full")]
-    dataset = Dataset(dataset_id="wildchat_1m_full", data=processed_data)
-    return dataset
+    #dataset = Dataset(dataset_id="wildchat_1m_full", data=processed_data)
+    #return dataset
+    return processed_data
 
 
 # Download ShareGPT
@@ -224,6 +226,94 @@ def download_chatbot_arena():
     
     return conversations_to_return
 
+
+# Download Arena Human Preference 140k
+def download_arena_human_preference_140k():
+    print("Starting Download for Arena Human Preference 140k...")
+    dset = io.huggingface_download('lmarena-ai/arena-human-preference-140k', split='train')
+
+    def process_data(datum):
+        # Extract conversation from the datum
+        # This dataset contains conversation_a and conversation_b with human preference labels
+        
+        conversations_to_return = []
+        
+        # Process conversation_a
+        if datum.get('conversation_a'):
+            conv_a = []
+            for idx, msg in enumerate(datum.get('conversation_a', [])):
+                conv_a.append({
+                    "role": msg.get("role", "user" if idx % 2 == 0 else "assistant"),
+                    "turn": idx,
+                    "content": msg.get("content", ""),
+                    "image": "",
+                })
+            
+            conversation_a = Conversation(
+                conversation_id="arena_human_pref_" + str(datum.get('id', uuid.uuid4())).replace("-", "_") + "_a",
+                dataset_id="arena_human_preference_140k",
+                user_id=None,
+                time=datum.get('timestamp').isoformat() if datum.get('timestamp') and isinstance(datum.get('timestamp'), datetime) else None,
+                model=datum.get('model_a'),
+                conversation=conv_a,
+                geography=datum.get('country', 'Unknown')
+            )
+            conversations_to_return.append(conversation_a)
+        
+        # Process conversation_b
+        if datum.get('conversation_b'):
+            conv_b = []
+            for idx, msg in enumerate(datum.get('conversation_b', [])):
+                conv_b.append({
+                    "role": msg.get("role", "user" if idx % 2 == 0 else "assistant"),
+                    "turn": idx,
+                    "content": msg.get("content", ""),
+                    "image": "",
+                })
+            
+            conversation_b = Conversation(
+                conversation_id="arena_human_pref_" + str(datum.get('id', uuid.uuid4())).replace("-", "_") + "_b",
+                dataset_id="arena_human_preference_140k",
+                user_id=None,
+                time=datum.get('timestamp').isoformat() if datum.get('timestamp') and isinstance(datum.get('timestamp'), datetime) else None,
+                model=datum.get('model_b'),
+                conversation=conv_b,
+                geography=datum.get('country', 'Unknown')
+            )
+            conversations_to_return.append(conversation_b)
+        
+        # If there's a single conversation field instead of a/b split
+        if datum.get('conversation') and not datum.get('conversation_a'):
+            conv = []
+            for idx, msg in enumerate(datum.get('conversation', [])):
+                conv.append({
+                    "role": msg.get("role", "user" if idx % 2 == 0 else "assistant"),
+                    "turn": idx,
+                    "content": msg.get("content", ""),
+                    "image": "",
+                })
+            
+            conversation = Conversation(
+                conversation_id="arena_human_pref_" + str(datum.get('id', uuid.uuid4())).replace("-", "_"),
+                dataset_id="arena_human_preference_140k",
+                user_id=None,
+                time=datum.get('timestamp').isoformat() if datum.get('timestamp') and isinstance(datum.get('timestamp'), datetime) else None,
+                model=datum.get('model'),
+                conversation=conv,
+                geography=datum.get('country', 'Unknown')
+            )
+            conversations_to_return.append(conversation)
+        
+        return conversations_to_return
+    
+    all_conversations = []
+    for datum in tqdm(dset, desc="Processing Arena Human Preference 140k"):
+        convs = process_data(datum)
+        all_conversations.extend(convs)
+
+    
+    return all_conversations
+
 # Download Alpaca Eval
 def download_alpaca_eval():
     print("Starting Download for AlpacaEval..")
@@ -272,7 +362,7 @@ def download_mmlu():
                 {
                     "role": "user",
                     "turn": 0, 
-                    "content": datum.get("question") + " " + " ".join(f"{choice_indiciators[i]} {datum.get("choices")[i]}" for i in range(len(datum.get("choices")))),
+                    "content": datum.get("question") + " " + " ".join(f"{choice_indiciators[i]} {datum.get('choices')[i]}" for i in range(len(datum.get("choices")))),
                     "image": "",
                 }
             ]
@@ -395,13 +485,14 @@ DOWNLOAD_FUNCTIONS = {
     "wildchat_v1": download_wildchat_v1,
     "wildchat_private": download_wildchat_private,
     "lmsys_1m": download_lmsys_1m,
+    "arena_human_preference_140k": download_arena_human_preference_140k,
     "sharegpt_v1": download_sharegpt_v1,
     "chatbot_arena": download_chatbot_arena,
     "alpaca_eval": download_alpaca_eval,
     "mmlu": download_mmlu,
     "hle": download_hle, 
     "gpqa": download_gpqa, 
-    "swebench": download_swebench
+    "swebench": download_swebench,
 }
 
 
@@ -441,7 +532,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--sample",
         required=False,
-        default=False,
+        default=None,
         help=f"An integer for how many to sample from the dataset."
     )
     parser.add_argument(

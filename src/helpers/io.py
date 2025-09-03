@@ -170,7 +170,7 @@ def huggingface_download(
     elif name:
         dset = load_dataset(data_address, name, use_auth_token=True)
     else:
-        dset = load_dataset(data_address, use_auth_token=True)
+        dset = load_dataset(data_address) #, use_auth_token=True)
 
     if split:
         dset = dset[split]
