@@ -10,3 +10,4 @@ scikit-learn
 torch
 nltk
 statsmodels
+lingua
