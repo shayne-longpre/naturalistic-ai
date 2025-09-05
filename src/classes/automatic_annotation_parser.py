@@ -2,6 +2,7 @@ import sys
 import json
 import re
 import copy
+import os
 from collections import defaultdict
 from typing import List, Dict, Tuple, Any, Optional
 from src.helpers import io
@@ -131,7 +132,11 @@ def parse_automatic_annotations(
 
     level_id = raw_entries[0]["level_id"]
     prompt_id = raw_entries[0]["prompt_id"]
-    OPTIONS = io.read_json("../src/scripts/taxonomy_options.json")
+    # Resolve taxonomy options path relative to this file so it works regardless of CWD
+    _classes_dir = os.path.dirname(os.path.abspath(__file__))
+    _src_dir = os.path.dirname(_classes_dir)
+    _taxonomy_options_path = os.path.join(_src_dir, "scripts", "taxonomy_options.json")
+    OPTIONS = io.read_json(_taxonomy_options_path)
     task_options = extract_options(OPTIONS, level_id, prompt_id)
     if not task_options:
         return []
@@ -155,7 +160,33 @@ def parse_automatic_annotations(
                 labels = item['labels'] if isinstance(item['labels'], list) else [item['labels']]
                 clean_labels = [clean_annotation_label(label) for label in labels]
                 label_to_canonical_label = constants.ANNOTATION_TAXONOMY_REVERSE_REMAPPER[f"{level_id}_{prompt_id}"]
-                clean_labels = [label_to_canonical_label[label] for label in clean_labels]
+                
+                # Handle case-insensitive mapping
+                mapped_labels = []
+                for label in clean_labels:
+                    if label in label_to_canonical_label:
+                        mapped_labels.append(label_to_canonical_label[label])
+                    else:
+                        # Try case-insensitive matching
+                        found = False
+                        for key, canonical in label_to_canonical_label.items():
+                            if key.lower() == label.lower():
+                                mapped_labels.append(canonical)
+                                found = True
+                                break
+                        if not found:
+                            # If still not found, try to find a partial match
+                            for key, canonical in label_to_canonical_label.items():
+                                if label.lower() in key.lower() or key.lower() in label.lower():
+                                    mapped_labels.append(canonical)
+                                    found = True
+                                    break
+                        if not found:
+                            print(f"Warning: Could not map label '{label}' to canonical label for {level_id}_{prompt_id}")
+                            # Skip this label
+                            continue
+                
+                clean_labels = mapped_labels
 
                 confidences = item['confidence'] if isinstance(item['confidence'], list) else [item['confidence']]
                 valid_labels.extend(clean_labels)
