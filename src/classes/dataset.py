@@ -1,50 +1,42 @@
-import os
-import sys
-import random
-import typing
+"""
+This dataset.py file is used to define the Dataset objects.
+A Dataset is used to define the collection of conversations or samples.
+To download a dataset, use the download_datasets.py file.
+To load a dataset, use the load_datasets.py file.
+"""
+
+import itertools
 import json
 import os
-from torch.utils.data import DataLoader
-import pandas as pd 
-import itertools
-import numpy as np
-from collections import defaultdict, Counter
-from sklearn.metrics import cohen_kappa_score, f1_score, jaccard_score, confusion_matrix
+import random
+import typing
+from collections import defaultdict
+
+import pandas as pd
 from nltk.metrics import AnnotationTask, masi_distance
-from statsmodels.stats.inter_rater import fleiss_kappa
+from sklearn.metrics import cohen_kappa_score, f1_score, jaccard_score
 
-sys.path.append("./")
-
-from src.classes.conversation import Conversation
 from src.classes.annotation_set import AnnotationSet
+from src.classes.conversation import Conversation
 
 
-"""
-This dataset.py file is used to define the Dataset objects. 
-A Dataset is used to define the collection of conversations or samples. 
-To download a dataset, use the download_datasets.py file. 
-To load a dataset, use the load_datasets.py file. 
-"""
-
-    
-
-class Dataset(object): 
+class Dataset(object):
     """Dataset class used to define the common features / functions of any evaluation or usage dataset."""
 
     def __init__(
-        self, 
-        dataset_id: str, 
+        self,
+        dataset_id: str,
         data: typing.List[Conversation],
     ):
         self.dataset_id: str = dataset_id
         self.data: typing.List[Conversation] = data
-        
+
     @classmethod
     def load(cls, json_path: str, datasetid_override: str = None):
         """Alternative constructor that initializes from a JSON file."""
         with open(json_path, 'r') as f:
             data = json.load(f)
-        
+
         # Create a new instance with the remaining data
         raw_data = data if isinstance(data, list) else data["data"]
         return cls(
@@ -80,12 +72,11 @@ class Dataset(object):
             return {cc.conversation_id: cc for cc in self.data if cc.conversation_id in ids}
         else:
             return {f"{cc.conversation_id}-{m.turn}": m for cc in self.data for m in cc.conversation if f"{cc.conversation_id}-{m.turn}" in ids}
-    
 
     def extract_conversation_metadata_by_ids(
         self,
         ex_ids: typing.List[str],
-        annotation_keys: typing.List[typing.Tuple[str, typing.Optional[str]]], 
+        annotation_keys: typing.List[typing.Tuple[str, typing.Optional[str]]],
         level: str = "conversation",
     ):
         """
@@ -101,16 +92,15 @@ class Dataset(object):
 
         return ex_id_to_annotation_vals
 
-
     def find_conversations_by_metadata(
         self,
-        annotation_key: typing.Tuple[str, typing.Optional[str]], 
+        annotation_key: typing.Tuple[str, typing.Optional[str]],
         level: str = "conversation",
         search_list: typing.List[str] = None,
     ):
         """Find conversations with metadata values in search_list.
-        
-        Returns: 
+
+        Returns:
             List of conversation IDs (or conversation-turn IDs for messages)
         """
         matches = []
@@ -118,72 +108,71 @@ class Dataset(object):
             for conv in self.data:
                 val = conv.get_attr(annotation_key[0], annotation_key[1])
                 if (not search_list and not val) or (val in search_list):
-                    matches.appen(conv.conversation_id)
+                    matches.append(conv.conversation_id)
         else:
             for conv in self.data:
                 for idx, message in enumerate(conv.conversation):
                     val = message.get_attr(annotation_key[0], annotation_key[1])
-                    if (not search_list and not val) or (val in search_list): 
+                    if (not search_list and not val) or (val in search_list):
                         matches.append(f"{conv.conversation_id}-{idx}")
         return matches
 
-
     def find_conflicting_annotations(
         self,
-        annotation_keys: typing.List[typing.Tuple[str, typing.Optional[str]]], 
+        annotation_keys: typing.List[typing.Tuple[str, typing.Optional[str]]],
         level: str = "conversation",
     ):
         """Finds all annotations for N sources that are conflicting.
-        
+
         Returns:
             List of conversation IDs (or conversation-turn IDs for messages)
         """
         conflict_ids = []
         if level == "conversation":
             for conv in self.data:
-                vals = [conv.get_attr(src, task_name) for (src, task_name) in annotation_keys]
+                vals = [conv.get_attr(src, task_name)
+                        for (src, task_name) in annotation_keys]
                 if not all(item == vals[0] for item in vals):
                     conflict_ids.append(conv.conversation_id)
         else:
             for conv in self.data:
                 for idx, message in enumerate(conv.conversation):
-                    vals = [conv.get_attr(src, task_name) for (src, task_name) in annotation_keys]
+                    vals = [conv.get_attr(src, task_name)
+                            for (src, task_name) in annotation_keys]
                     if not all(item == vals[0] for item in vals):
                         conflict_ids.append(f"{conv.conversation_id}-{idx}")
         return conflict_ids
 
-
     def extract_all_metadata_values_for_annotation_source_name(
         self,
-        annotation_keys: typing.List[typing.Tuple[str, typing.Optional[str]]], 
+        annotation_keys: typing.List[typing.Tuple[str, typing.Optional[str]]],
         level: str = "conversation",
     ):
         """For a given annotation set, we extract all observed values."""
         if level == "conversation":
             ex_ids = [cc.conversation_id for cc in self.data]
         else:
-            ex_ids = [f"{cc.conversation_id}-{idx}" for cc in self.data for idx, _ in enumerate(cc.conversation)]
+            ex_ids = [f"{cc.conversation_id}-{idx}" for cc in self.data for idx,
+                      _ in enumerate(cc.conversation)]
 
         # Ex_id --> src-task --> value
         ex_id_to_annotation_vals = self.extract_conversation_metadata_by_ids(
             ex_ids,
-            annotation_keys=annotation_keys, 
+            annotation_keys=annotation_keys,
             level=level,
         )
         all_values = [
-            val for src_task_to_value in ex_id_to_annotation_vals.values() 
+            val for src_task_to_value in ex_id_to_annotation_vals.values()
             for vals in src_task_to_value.values() if vals is not None
             for val in vals
         ]
         # return Counter(all_values)
         return set(all_values)
 
-
-
     def add_annotations(
         self,
         annotation_set: AnnotationSet,
-        verbose: bool=False,
+        verbose: bool = False,
     ):
         """Update the dataset `metadata` fields in conversation or messages directly.
         This is used to maintain any type of metadata alongside the dataset.
@@ -192,7 +181,7 @@ class Dataset(object):
         assert annotation_set.dataset_id == self.dataset_id
         annotation_conv_ids = [x.target_id.split("-")[0] for x in annotation_set.annotations]
         dset_conv_ids = [cc.conversation_id for cc in self.data]
-        
+
         assert set(annotation_conv_ids) <= set(dset_conv_ids)
         src, name, lvl = annotation_set.source, annotation_set.name, annotation_set.level
         if lvl == "conversation":
@@ -246,15 +235,14 @@ class Dataset(object):
         #         })
         else:
             raise Exception
-        
-    
+
     def get_confidence_distribution(
         self,
         name: str,
         level: str,
         annotation_source: typing.Optional[str] = None,
         bin_size: float = 0.1,
-        ) -> typing.Dict[str, int]:
+    ) -> typing.Dict[str, int]:
         """
         Get the distribution of confidence scores for a specific feature.
 
@@ -292,9 +280,8 @@ class Dataset(object):
 
         return dict(sorted(confidence_distribution.items()))
 
-            
     def get_annotation_distribution(
-        self, 
+        self,
         name: str,
         level: str = "conversation",
         annotation_source: typing.Optional[str] = None,
@@ -302,7 +289,7 @@ class Dataset(object):
     ) -> typing.Dict[str, int]:
         """
         Get the distribution of annotation values for a specific feature.
-        
+
         Args:
             name: Name of the annotation feature to analyze
             level: 'conversation' or 'message'.
@@ -310,7 +297,7 @@ class Dataset(object):
                 If None and name is a built-in attribute, will use that directly
             annotation_as_list_type: If the annotation type is list, turn this to True to
                 tally the full list as the value, rather than each element (default).
-        
+
         Returns:
             Dictionary mapping each annotation value to its frequency count
         """
@@ -352,12 +339,11 @@ class Dataset(object):
                         value = msg.metadata[f"{annotation_source}-{name}"].value
                         distribution = update_value(distribution, value)
 
-        return distribution        
-
+        return distribution
 
     def get_joint_distribution(
-        self, 
-        annotations1: typing.Tuple[str, typing.Optional[str]], 
+        self,
+        annotations1: typing.Tuple[str, typing.Optional[str]],
         annotations2: typing.Tuple[str, typing.Optional[str]],
         level: str = "conversation",
         compute_disagreement: bool = False,
@@ -365,13 +351,13 @@ class Dataset(object):
     ):
         """
         Get the joint distribution of two annotation features, supporting list-valued features.
-        
+
         Args:
             annotations1: Tuple of (name, source) for the first annotation
             annotations2: Tuple of (name, source) for the second annotation
             level: The level at which to compute distributions ("conversation" or "message")
             compute_disagreement: Whether to compute disagreement metrics (only for same label sets)
-            
+
         Returns:
             If compute_disagreement is False:
                 DataFrame representing the label-level confusion matrix
@@ -384,18 +370,16 @@ class Dataset(object):
         """
         name1, source1 = annotations1
         name2, source2 = annotations2
-        
+
         # Format full annotation names
         full_name1 = f"{source1}-{name1}" if source1 else name1
         full_name2 = f"{source2}-{name2}" if source2 else name2
-        
 
         def _create_pairwise_combinations(item_id, val1, val2):
             """vCreate all pairwise combinations of labels between two potentially list-valued features."""
             list1 = val1 if isinstance(val1, list) else [val1]
             list2 = val2 if isinstance(val2, list) else [val2]
             return [(item_id, label1, label2) for label1, label2 in itertools.product(list1, list2)]
-
 
         def _create_confusion_matrix(annotation_pairs):
             """
@@ -413,9 +397,8 @@ class Dataset(object):
             matrix = pd.DataFrame(0, index=unique_vals1, columns=unique_vals2)
             for (val1, val2), count in joint_counts.items():
                 matrix.loc[val1, val2] = count
-                
-            return matrix
 
+            return matrix
 
         def _compute_annotator_disagreement(annotation_pairs):
             """
@@ -464,7 +447,6 @@ class Dataset(object):
 
             return metrics
 
-        
         def _get_annotation_pairs():
             """
 
@@ -479,16 +461,14 @@ class Dataset(object):
             def _extract_annotation_pair(obj, obj_id):
                 val1 = obj.get_attr(source1, name1)
                 val2 = obj.get_attr(source2, name2)
-                
+
                 local_combination_pair, local_annotation_pair = None, None
                 if val1 is not None and val2 is not None:
                     # Add all pairwise combinations for list values
-                    local_combination_pair = _create_pairwise_combinations(
-                        obj_id, val1, val2
-                    )
+                    local_combination_pair = _create_pairwise_combinations(obj_id, val1, val2)
                     local_annotation_pair = (
-                        obj_id, 
-                        sorted(val1) if isinstance(val1, list) else val1, 
+                        obj_id,
+                        sorted(val1) if isinstance(val1, list) else val1,
                         sorted(val2) if isinstance(val2, list) else val2,
                     )
                 # if obj_id == "wildchat_40fe9070a5268327e0278d00a7bd1396-2":
@@ -530,13 +510,9 @@ class Dataset(object):
 
         # Create confusion matrix DataFrame
         matrix = _create_confusion_matrix(combination_pairs)
-        
+
         # Compute agreement metrics if requested
         if compute_disagreement:
             metrics = _compute_annotator_disagreement(annotation_pairs)
             return matrix, metrics, annotation_pairs
-        else:
-            return matrix, annotation_pairs
-
-
-
+        return matrix, annotation_pairs

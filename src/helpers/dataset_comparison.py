@@ -1,11 +1,14 @@
-import itertools
+"""Dataset comparison helper functions."""
+
 from collections import Counter, defaultdict
 from typing import Callable, Dict, List, Tuple, Union
-from src.classes.dataset import Dataset
-from src.classes.conversation import Conversation
-from scipy.stats import chi2_contingency, wasserstein_distance, ks_2samp
-from scipy.spatial.distance import jensenshannon
+
 import numpy as np
+from scipy.spatial.distance import jensenshannon
+from scipy.stats import chi2_contingency, ks_2samp, wasserstein_distance
+
+from src.classes.conversation import Conversation
+from src.classes.dataset import Dataset
 
 
 def split_dataset_by(
@@ -64,7 +67,6 @@ def split_dataset_by(
     }
 
 
-
 def compare_annotations_to_baseline(
     group_datasets: Dict[str, Dataset],
     baseline_dataset: Dataset,
@@ -78,7 +80,7 @@ def compare_annotations_to_baseline(
     Args:
         group_datasets (dict[str, Dataset]): Group name → Dataset.
         baseline_dataset (Dataset): Baseline dataset.
-        annotation_source_tasks (list[(attribute_name, source)]): 
+        annotation_source_tasks (list[(attribute_name, source)]):
             e.g. [("prompt_function_purpose", "automatic_v0"), ...]
 
     Returns:
@@ -131,7 +133,8 @@ def compare_annotations_to_baseline(
 
             if data_type_base == "categorical":
                 # categorical: counts & percentages
-                all_labels = sorted(set(baseline_data.keys()) | set(group_data.keys()))
+                all_labels = sorted(set(baseline_data.keys())
+                                    | set(group_data.keys()))
                 total_base = sum(baseline_data.values())
                 total_group = sum(group_data.values())
 
@@ -158,7 +161,7 @@ def compare_annotations_to_baseline(
                         metrics['chi2'] = None
                         metrics['p_value'] = None
 
-                    try: 
+                    try:
                         # jensen-shannon divergence
                         jsd = jensenshannon(group_pcts + 1e-12, base_pcts + 1e-12)
                         metrics['jsd'] = float(jsd)

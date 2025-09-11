@@ -1,16 +1,11 @@
-import os
-import sys
-import typing
+"""Annotation set class."""
+
 import json
-import re
-from collections import defaultdict
+import os
+import typing
 
-sys.path.append("./")
-
-from src.classes.annotation_record import AnnotationRecord
-from src.helpers import io
 from src.classes import automatic_annotation_parser
-
+from src.classes.annotation_record import AnnotationRecord
 
 
 class AnnotationSet(object):
@@ -19,14 +14,15 @@ class AnnotationSet(object):
     def __init__(
         self,
         source: str,  # identify the annotation set uniquely: model / human / date
-        name: str, # the annotation task: "language_id" / "conversation_purpose" / etc
-        level: str, # "conversation" or "message"
+        name: str,  # the annotation task: "language_id" / "conversation_purpose" / etc
+        level: str,  # "conversation" or "message"
         dataset_id: str,
         annotations: typing.List[AnnotationRecord],
     ):
         assert "-" not in source and "-" not in name, \
-            f"Please do not include '-' in source or name, as we use this character for joining/splitting keys."
-        assert level in ["conversation", "message", "prompt", "response", "turn"]
+            "Please do not include '-' in source or name, as we use this character for joining/splitting keys."
+        assert level in ["conversation", "message",
+                         "prompt", "response", "turn"]
         self.source = source
         self.name = name
         self.level = level
@@ -38,50 +34,49 @@ class AnnotationSet(object):
         """Alternative constructor that initializes from a JSON file."""
         with open(json_path, 'r') as f:
             data = json.load(f)
-        
+
         # Create a new instance with the remaining data
         return cls(
-            source=data["source"], 
-            name=data["name"], 
+            source=data["source"],
+            name=data["name"],
             level=data["level"],
             dataset_id=data["dataset_id"],
             annotations=[
                 AnnotationRecord(
-                    value=x["value"], 
+                    value=x["value"],
                     target_id=x["target_id"],
                     annotator=x.get("annotator"),
-                ) 
+                )
                 for x in data["annotations"]],
         )
-
 
     # @classmethod
     # def load_labelstudio(cls, json_path: str, source: str):
     #     """Alternative constructor that initializes from LabelStudio file(s)."""
     #     # Parse all the Label Studio annotations together
     #     annotations = parse_labelstudio_files(json_path)
-        
+
     #     # Create a new instance with the remaining data
     #     return cls(
-    #         source=source, 
-    #         name=data["name"], 
+    #         source=source,
+    #         name=data["name"],
     #         level=data["level"],
     #         dataset_id=data["dataset_id"],
     #         annotations=[
     #             AnnotationRecord(
-    #                 value=x["value"], 
+    #                 value=x["value"],
     #                 target_id=x["target_id"],
     #                 annotator=x.get("annotator"),
-    #             ) 
+    #             )
     #             for x in data["annotations"]],
     #     )
 
     @classmethod
     def load_automatic(
-        cls, 
+        cls,
         path: str,
         source: str,
-        dataset_id_override: str=None,
+        dataset_id_override: str = None,
     ):
         """Alternative constructor that initializes from automatic annotation file(s)."""
         annotations = automatic_annotation_parser.parse_automatic_annotations(path, verbose=True)
@@ -91,15 +86,15 @@ class AnnotationSet(object):
         prompt_id = os.path.basename(path).split(".")[0]
         # level_id = annotations[0]["level_id"]
         # prompt_id = annotations[0]["prompt_id"]
-    
-        dataset_id = dataset_id_override or annotations[0]["dataset_id"] 
+
+        dataset_id = dataset_id_override or annotations[0]["dataset_id"]
 
         # if prompt_id == "response_interaction_features":
         #     print("***** YAAASSSSS")
 
         return cls(
-            source=source, 
-            name=prompt_id, 
+            source=source,
+            name=prompt_id,
             level=level_id,
             dataset_id=dataset_id,
             annotations=[
@@ -108,7 +103,7 @@ class AnnotationSet(object):
                     confidence=x["parsed_confidence"],
                     target_id=x.get("conversation_id", x.get("ex_id")) + "-" + str(x["turn"] + 1) if "response" in prompt_id else x.get("conversation_id", x.get("ex_id")) + "-" + str(x["turn"]),
                     annotator=x.get("model"),
-                ) 
+                )
                 for x in annotations],
         )
 
@@ -135,14 +130,12 @@ class AnnotationSet(object):
         self.annotations = remapped_annotations
 
 
-        
-
 def process_annotations_to_annotation_sets(
-    annotations_list, 
+    annotations_list,
     source: str,
 ):
     task_groups = {}
-    
+
     for annotation in annotations_list:
         if "annotation_tasks" not in annotation:
             continue
@@ -150,7 +143,7 @@ def process_annotations_to_annotation_sets(
         conv_id = annotation.get("conversation_id", "") or annotation.get("text_in_conversation_turn", {}).get("conversation_id", "")
         turn_idx = annotation.get("text_in_conversation_turn", {}).get("turn", 0)
         annotator = annotation.get("annotator_name", "")
-        
+
         for task_category, task_values in annotation["annotation_tasks"].items():
             if task_category not in task_groups:
                 task_groups[task_category] = []
@@ -167,7 +160,7 @@ def process_annotations_to_annotation_sets(
             source=source,
             name=task_name,
             level="message",
-            dataset_id="wildchat_1m", # TODO: Fix.
+            dataset_id="wildchat_1m",  # TODO: Fix.
             annotations=[
                 AnnotationRecord(
                     value=x["annotation_value"],

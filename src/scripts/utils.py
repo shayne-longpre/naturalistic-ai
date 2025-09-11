@@ -1,11 +1,12 @@
-import sys
-import os
+"""Utililities for scripts."""
+
 import json
+import os
+
 import pandas as pd
 
-sys.path.append("./")
-
 from src.helpers import io
+
 
 def char_count(s):
     return len(s)
@@ -47,7 +48,7 @@ def load_existing_conversation_ids(save_fpath):
 def load_existing_exid_turn_pairs(filepath):
     if not os.path.exists(filepath):
         return set()
-    
+
     existing_pairs = set()
     with open(filepath, 'r', encoding='utf-8') as f:
         for line in f:

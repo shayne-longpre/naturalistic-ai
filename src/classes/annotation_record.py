@@ -1,5 +1,4 @@
-import sys
-import typing
+"""Annotation record class."""
 
 
 class AnnotationRecord(object):
@@ -8,9 +7,9 @@ class AnnotationRecord(object):
     def __init__(
         self,
         value,
-        target_id: str, # conversation_id or conversation_id-turn_id
+        target_id: str,  # conversation_id or conversation_id-turn_id
         confidence: float = None,
-        annotator: str=None,
+        annotator: str = None,
     ):
         self.value = value
         self.confidence = confidence

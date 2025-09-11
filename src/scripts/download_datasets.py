@@ -1,27 +1,23 @@
-import sys
-import os
-import argparse
-import numpy as np
-import pandas as pd
-import random
-from datetime import datetime
-from tqdm import tqdm
-from huggingface_hub import hf_hub_download
-from datasets import load_dataset
+"""
+This file is used to download and format datasets in a common format (list of Conversation objects).
+To download a script, run something like: "python src/scripts/download_datasets.py --dataset_id=mmlu".
+See arg description for specifics.
+"""
 
-sys.path.append("./")
-# from src.classes.message import Message
+import argparse
+import random
+import uuid
+from datetime import datetime
+
+import pandas as pd
+from datasets import load_dataset
+from huggingface_hub import hf_hub_download
+from tqdm import tqdm
+
 from src.classes.conversation import Conversation
 from src.classes.dataset import Dataset
-
 from src.helpers import io
-import uuid
 
-"""
-This file is used to download and format datasets in a common format (list of Conversation objects). 
-To download a script, run something like: "python src/scripts/download_datasets.py --dataset_id=mmlu". 
-See arg description for specifics. 
-"""
 
 def download_lmsys_1m():
     print("\nDownloading lmsys-chat-1m...")
@@ -53,6 +49,8 @@ def download_lmsys_1m():
     return [process_data(datum) for datum in tqdm(dset, desc="Processing lymsys-chat-1m")]
 
 # Download WildChat
+
+
 def download_wildchat_v1():
     print("Starting Download for WildChat-1M...")
     dset = io.huggingface_download("allenai/WildChat-1M", split="train")
@@ -61,7 +59,7 @@ def download_wildchat_v1():
         state = datum.get('state')
         country = f"{datum.get('country', 'Unknown')}"
         timestamp = datum.get('timestamp')
-        
+
         conversation = [
             {
                 "role": msg.get("role"),
@@ -81,10 +79,12 @@ def download_wildchat_v1():
             conversation=conversation,
             geography=country if state is None else f"{country}; {state}"
         )
-    
+
     return [process_data(datum) for datum in tqdm(dset, desc="Processing WildChat")]
 
 # Download WildChat (private repo)
+
+
 def download_wildchat_private(sample=None):
     print("Starting Download for Yuntian's WildChat-1M-Full...")
     # dset = io.huggingface_download("yuntian-deng/WildChat-1M-Full-with-parameters-internal", split="train", sample=sample)
@@ -138,14 +138,12 @@ def download_sharegpt_v1():
         subfolder="HTML_cleaned_raw_dataset",
         repo_type="dataset",
     )
-    full_dset = pd.concat([pd.read_json(sv_dset_p1), pd.read_json(sv_dset_p2)]).to_dict(
-        "records"
-    )
+    full_dset = pd.concat([pd.read_json(sv_dset_p1), pd.read_json(sv_dset_p2)]).to_dict("records")
 
     sharegpt_systems = ["system", "human", "user", "gpt", "chatgpt", "bing", "bard", "assistant"]
     def process_data(datum):
         conversation = []
-        
+
         for idx, msg in enumerate(datum.get("conversations", [])):
             assert msg.get("from", "") in sharegpt_systems, "Error: " + msg["from"]
             conversation.append({
@@ -165,14 +163,16 @@ def download_sharegpt_v1():
             geography=None
         )
 
-    return [process_data(datum) for datum in tqdm(full_dset, desc="Processing ShareGPT")] 
+    return [process_data(datum) for datum in tqdm(full_dset, desc="Processing ShareGPT")]
 
-# Download ChatBotArena 
+# Download ChatBotArena
+
+
 def download_chatbot_arena():
     print("Starting Download for ChatBotArena...")
     dset = io.huggingface_download("lmsys/chatbot_arena_conversations", split="train")
 
-    def add_turn_and_rename_keys(conv:list[object]):
+    def add_turn_and_rename_keys(conv: list[object]):
         conv_with_turn = []
         for idx, statement in enumerate(conv):
             new_statement = {
@@ -194,7 +194,7 @@ def download_chatbot_arena():
 
         conv_a_reformatted = add_turn_and_rename_keys(conv_a)
         conv_b_reformatted = add_turn_and_rename_keys(conv_b)
-        
+
         conversation_a = Conversation(
             conversation_id="chatbot_arena_" + datum.get('question_id') + "_a",
             dataset_id="chatbot_arena",
@@ -204,7 +204,7 @@ def download_chatbot_arena():
             conversation=conv_a_reformatted,
             geography=country if state is None else f"{country}; {state}"
         )
-        
+
         conversation_b = Conversation(
             conversation_id="chatbot_arena_" + datum.get('question_id') + "_b",
             dataset_id="chatbot_arena",
@@ -215,15 +215,15 @@ def download_chatbot_arena():
             geography=country if state is None else f"{country}; {state}"
         )
 
-        return conversation_a, conversation_b 
-    
+        return conversation_a, conversation_b
+
     conversations_to_return = []
-    
-    for datum in tqdm(dset, desc="Processing ChatBotArena"): 
+
+    for datum in tqdm(dset, desc="Processing ChatBotArena"):
         conv_a, conv_b = process_data(datum)
         conversations_to_return.append(conv_a)
         conversations_to_return.append(conv_b)
-    
+
     return conversations_to_return
 
 
@@ -235,9 +235,9 @@ def download_arena_human_preference_140k():
     def process_data(datum):
         # Extract conversation from the datum
         # This dataset contains conversation_a and conversation_b with human preference labels
-        
+
         conversations_to_return = []
-        
+
         # Process conversation_a
         if datum.get('conversation_a'):
             conv_a = []
@@ -248,9 +248,10 @@ def download_arena_human_preference_140k():
                     "content": msg.get("content", ""),
                     "image": "",
                 })
-            
+
             conversation_a = Conversation(
-                conversation_id="arena_human_pref_" + str(datum.get('id', uuid.uuid4())).replace("-", "_") + "_a",
+                conversation_id="arena_human_pref_" +
+                str(datum.get('id', uuid.uuid4())).replace("-", "_") + "_a",
                 dataset_id="arena_human_preference_140k",
                 user_id=None,
                 time=datum.get('timestamp').isoformat() if datum.get('timestamp') and isinstance(datum.get('timestamp'), datetime) else None,
@@ -259,7 +260,7 @@ def download_arena_human_preference_140k():
                 geography=datum.get('country', 'Unknown')
             )
             conversations_to_return.append(conversation_a)
-        
+
         # Process conversation_b
         if datum.get('conversation_b'):
             conv_b = []
@@ -270,7 +271,7 @@ def download_arena_human_preference_140k():
                     "content": msg.get("content", ""),
                     "image": "",
                 })
-            
+
             conversation_b = Conversation(
                 conversation_id="arena_human_pref_" + str(datum.get('id', uuid.uuid4())).replace("-", "_") + "_b",
                 dataset_id="arena_human_preference_140k",
@@ -281,7 +282,7 @@ def download_arena_human_preference_140k():
                 geography=datum.get('country', 'Unknown')
             )
             conversations_to_return.append(conversation_b)
-        
+
         # If there's a single conversation field instead of a/b split
         if datum.get('conversation') and not datum.get('conversation_a'):
             conv = []
@@ -292,7 +293,7 @@ def download_arena_human_preference_140k():
                     "content": msg.get("content", ""),
                     "image": "",
                 })
-            
+
             conversation = Conversation(
                 conversation_id="arena_human_pref_" + str(datum.get('id', uuid.uuid4())).replace("-", "_"),
                 dataset_id="arena_human_preference_140k",
@@ -303,39 +304,41 @@ def download_arena_human_preference_140k():
                 geography=datum.get('country', 'Unknown')
             )
             conversations_to_return.append(conversation)
-        
+
         return conversations_to_return
-    
+
     all_conversations = []
     for datum in tqdm(dset, desc="Processing Arena Human Preference 140k"):
         convs = process_data(datum)
         all_conversations.extend(convs)
 
-    
     return all_conversations
 
 # Download Alpaca Eval
+
+
 def download_alpaca_eval():
     print("Starting Download for AlpacaEval..")
-    dset = load_dataset("tatsu-lab/alpaca_eval", split = "eval", trust_remote_code=True, token = True) #TODO integrate this with io helpers
+    # TODO integrate this with io helpers
+    dset = load_dataset("tatsu-lab/alpaca_eval", split="eval",
+                        trust_remote_code=True, token=True)
 
     def process_data(datum):
         conv = [
             {
                 "role": "user",
-                "turn": 0, 
+                "turn": 0,
                 "content": datum.get("instruction"),
                 "image": "",
-            }, 
+            },
             {
                 "role": "assistant",
-                "turn": 0, 
+                "turn": 0,
                 "content": datum.get("output"),
                 "image": "",
             }
         ]
 
-        
         return Conversation(
             conversation_id="alpaca_eval" + str(uuid.uuid4()),
             dataset_id="alpaca_eval",
@@ -345,47 +348,52 @@ def download_alpaca_eval():
             conversation=conv,
             geography="Unknown"
         )
-        
 
     return [process_data(datum) for datum in tqdm(dset, desc="Processing AlpacaEval")]
 
 # Download MMLU
+
+
 def download_mmlu():
     print("Starting Download for MMLU...")
     # ['question', 'choices', 'answer'],
-    categories = ['abstract_algebra', 'anatomy', 'astronomy', 'business_ethics', 'clinical_knowledge', 'college_biology', 'college_chemistry', 'college_computer_science', 'college_mathematics', 'college_medicine', 'college_physics', 'computer_security', 'conceptual_physics', 'econometrics', 'electrical_engineering', 'elementary_mathematics', 'formal_logic', 'global_facts', 'high_school_biology', 'high_school_chemistry', 'high_school_computer_science', 'high_school_european_history', 'high_school_geography', 'high_school_government_and_politics', 'high_school_macroeconomics', 'high_school_mathematics', 'high_school_microeconomics', 'high_school_physics', 'high_school_psychology', 'high_school_statistics', 'high_school_us_history', 'high_school_world_history', 'human_aging', 'human_sexuality', 'international_law', 'jurisprudence', 'logical_fallacies', 'machine_learning', 'management', 'marketing', 'medical_genetics', 'miscellaneous', 'moral_disputes', 'moral_scenarios', 'nutrition', 'philosophy', 'prehistory', 'professional_accounting', 'professional_law', 'professional_medicine', 'professional_psychology', 'public_relations', 'security_studies', 'sociology', 'us_foreign_policy', 'virology', 'world_religions']
+    categories = ['abstract_algebra', 'anatomy', 'astronomy', 'business_ethics', 'clinical_knowledge', 'college_biology', 'college_chemistry', 'college_computer_science', 'college_mathematics', 'college_medicine', 'college_physics', 'computer_security', 'conceptual_physics', 'econometrics', 'electrical_engineering', 'elementary_mathematics', 'formal_logic', 'global_facts', 'high_school_biology', 'high_school_chemistry', 'high_school_computer_science', 'high_school_european_history', 'high_school_geography', 'high_school_government_and_politics', 'high_school_macroeconomics', 'high_school_mathematics',
+                  'high_school_microeconomics', 'high_school_physics', 'high_school_psychology', 'high_school_statistics', 'high_school_us_history', 'high_school_world_history', 'human_aging', 'human_sexuality', 'international_law', 'jurisprudence', 'logical_fallacies', 'machine_learning', 'management', 'marketing', 'medical_genetics', 'miscellaneous', 'moral_disputes', 'moral_scenarios', 'nutrition', 'philosophy', 'prehistory', 'professional_accounting', 'professional_law', 'professional_medicine', 'professional_psychology', 'public_relations', 'security_studies', 'sociology', 'us_foreign_policy', 'virology', 'world_religions']
 
-    choice_indiciators = ["a)", "b)", "c)", "d)", "e)", "f)", "g)", "h)", "i)", "j)", "k)", "l)", "m)", "n)", "o)", "p)", "q)", "r)", "s)", "t)", "u)", "v)", "w)", "x)", "y)", "z)"]
+    choice_indiciators = ["a)", "b)", "c)", "d)", "e)", "f)", "g)", "h)", "i)", "j)", "k)",
+                          "l)", "m)", "n)", "o)", "p)", "q)", "r)", "s)", "t)", "u)", "v)", "w)", "x)", "y)", "z)"]
 
     def process_data(datum):
-            conv = [
-                {
-                    "role": "user",
-                    "turn": 0, 
-                    "content": datum.get("question") + " " + " ".join(f"{choice_indiciators[i]} {datum.get('choices')[i]}" for i in range(len(datum.get("choices")))),
-                    "image": "",
-                }
-            ]
+        conv = [
+            {
+                "role": "user",
+                "turn": 0,
+                "content": datum.get("question") + " " + " ".join(f"{choice_indiciators[i]} {datum.get('choices')[i]}" for i in range(len(datum.get("choices")))),
+                "image": "",
+            }
+        ]
 
-            return Conversation(
-                conversation_id="mmlu_" + str(uuid.uuid4()).replace("-", ""),
-                dataset_id="mmlu",
-                user_id=str(uuid.uuid4()).replace("-", ""),
-                time=None,
-                model=None,
-                conversation=conv,
-                geography="Unknown"
-            )
-    
+        return Conversation(
+            conversation_id="mmlu_" + str(uuid.uuid4()).replace("-", ""),
+            dataset_id="mmlu",
+            user_id=str(uuid.uuid4()).replace("-", ""),
+            time=None,
+            model=None,
+            conversation=conv,
+            geography="Unknown"
+        )
+
     conversations_to_return = []
     for category in tqdm(categories, desc="Processing MMLU Categories"):
         dset = load_dataset("tasksource/mmlu", category, token=True)["test"]
         for datum in dset:
             conversations_to_return.append(process_data(datum))
-    
+
     return conversations_to_return
 
 # Download HLE
+
+
 def download_hle():
     print("Starting Download for HLE (Humanity's Last Exam)...")
     dset = io.huggingface_download('cais/hle', split='test')
@@ -394,32 +402,34 @@ def download_hle():
         conv = [
             {
                 "role": "user",
-                "turn": 0, 
+                "turn": 0,
                 "content": datum.get("question"),
                 "image": datum.get("image") if datum.get("image") else ''
             }
         ]
-        
+
         return Conversation(
             conversation_id="hle_" + datum.get('id'),
             dataset_id="hle",
             user_id=str(datum.get('author_name')),
-            time="02/11/2025", # huggingface release date
+            time="02/11/2025",  # huggingface release date
             model=None,
             conversation=conv,
             geography="Unknown"
         )
-    
-    
+
     return [process_data(datum) for datum in tqdm(dset, desc="Processing Humanity's Last Exam")]
 
 # Download GPQA
+
+
 def download_gpqa():
     print("Starting Download for GPQA...")
     dset = io.huggingface_download('Idavidrein/gpqa', 'gpqa_extended', split="train")
 
     def process_data(datum):
-        choice_strings = ["Correct Answer", "Incorrect Answer 1", "Incorrect Answer 2", "Incorrect Answer 3"]
+        choice_strings = ["Correct Answer", "Incorrect Answer 1",
+                          "Incorrect Answer 2", "Incorrect Answer 3"]
         random.shuffle(choice_strings)
 
         choices = [
@@ -428,16 +438,15 @@ def download_gpqa():
             f"c) {datum.get(choice_strings[2])}",
             f"d) {datum.get(choice_strings[3])}"
         ]
-        
+
         conv = [
             {
                 "role": "user",
-                "turn": 0, 
+                "turn": 0,
                 "content": f"{datum.get('Question')}\nChoices:\n" + "\n".join(choices),
                 "image": '',
             }
         ]
-        
 
         return Conversation(
             conversation_id="gpqa_" + datum.get('Record ID'),
@@ -448,7 +457,7 @@ def download_gpqa():
             conversation=conv,
             geography="Unknown"
         )
-    
+
     return [process_data(datum) for datum in tqdm(dset, desc="Processing GPQA")]
 
 
@@ -458,16 +467,15 @@ def download_swebench():
     dset = io.huggingface_download('princeton-nlp/SWE-bench', split="test")
 
     def process_data(datum):
-        
+
         conv = [
             {
                 "role": "user",
-                "turn": 0, 
+                "turn": 0,
                 "content": f"Problem Statement: {datum.get('problem_statement')} \nRepo: {datum.get('repo')} \nBase_commit: {datum.get('base_commit')} \n",
                 "image": '',
             }
         ]
-        
 
         return Conversation(
             conversation_id="swebench_" + datum.get('instance_id'),
@@ -478,8 +486,9 @@ def download_swebench():
             conversation=conv,
             geography="Unknown"
         )
-    
+
     return [process_data(datum) for datum in tqdm(dset, desc="Processing GPQA")]
+
 
 DOWNLOAD_FUNCTIONS = {
     "wildchat_v1": download_wildchat_v1,
@@ -490,18 +499,18 @@ DOWNLOAD_FUNCTIONS = {
     "chatbot_arena": download_chatbot_arena,
     "alpaca_eval": download_alpaca_eval,
     "mmlu": download_mmlu,
-    "hle": download_hle, 
-    "gpqa": download_gpqa, 
+    "hle": download_hle,
+    "gpqa": download_gpqa,
     "swebench": download_swebench,
 }
 
 
 def download_dataset(
-    dataset_id:str, 
+    dataset_id: str,
     sample: int = None,
-    save_path_overwrite: str = None, 
+    save_path_overwrite: str = None,
 ):
-    # Check args 
+    # Check args
     assert dataset_id in DOWNLOAD_FUNCTIONS, f"{dataset_id} not in {DOWNLOAD_FUNCTIONS.keys()}"
 
     # Download data and optionally sample
@@ -510,16 +519,16 @@ def download_dataset(
     if sample is not None:
         data = random.sample(data, int(sample))
 
-    # Write to file 
-    if save_path_overwrite is not None: 
-        save_path = save_path_overwrite 
-    else: 
-       save_path = f"datasets/{dataset_id}/full.json"
-    
+    # Write to file
+    if save_path_overwrite is not None:
+        save_path = save_path_overwrite
+    else:
+        save_path = f"datasets/{dataset_id}/full.json"
+
     dset = Dataset(dataset_id=dataset_id, data=data)
     print(f"Saving {len(data)} conversations to {save_path}...")
-    dset.save_to_json(json_path = f"datasets/{dataset_id}/full.json")
-    
+    dset.save_to_json(json_path=f"datasets/{dataset_id}/full.json")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -533,7 +542,7 @@ if __name__ == "__main__":
         "--sample",
         required=False,
         default=None,
-        help=f"An integer for how many to sample from the dataset."
+        help="An integer for how many to sample from the dataset."
     )
     parser.add_argument(
         "--save_path_overwrite",
