@@ -1,14 +1,12 @@
-import sys
+"""Automatic annotation parser helper functions."""
+
+import copy
 import json
 import re
-import copy
 from collections import defaultdict
-from typing import List, Dict, Tuple, Any, Optional
-from src.helpers import io
+from typing import Any, Dict, List, Optional, Tuple
 
-sys.path.append("../")
-
-from src.helpers import constants
+from src.helpers import constants, io
 
 
 # Helper Functions
@@ -77,14 +75,15 @@ def label_in_options_partial(label: str, options: List[str]) -> bool:
 
 # Core Validation Function
 
+
 def validate_entry(
-    entry: Dict[str, Any], 
+    entry: Dict[str, Any],
     options: List[str],
     default_to_none: bool = False,
 ) -> Tuple[bool, str, Optional[List[Dict[str, Any]]]]:
     """Validate an entry against options and extract JSON data if valid.
-    
-    Summary: Right now this function just checks dictionary is well formed, and that labels, when normalized, 
+
+    Summary: Right now this function just checks dictionary is well formed, and that labels, when normalized,
     match something from "../src/scripts/taxonomy_options.json".
 
     TODO: After, we should remap all labels so they look like ones from Cedric.
@@ -120,9 +119,9 @@ def validate_entry(
 
 
 def parse_automatic_annotations(
-    fpath, 
-    conf_threshold: int=0.3,
-    verbose: bool=False
+    fpath,
+    conf_threshold: int = 0.3,
+    verbose: bool = False
 ):
     # print(fpath)
     raw_entries = io.read_jsonl(fpath)

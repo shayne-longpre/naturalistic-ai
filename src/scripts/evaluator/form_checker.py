@@ -1,17 +1,16 @@
-import sys
-import os
+"""Form checker."""
+
+import argparse
 import csv
 import math
-import argparse
 from collections import Counter
-from typing import List, Dict, Any
-
-sys.path.append("./")
+from typing import Any, Dict, List
 
 from src.classes import automatic_annotation_parser
 from src.helpers import io
 
 # === Utility functions ===
+
 
 def compute_entropy(counts: Counter) -> float:
     total = sum(counts.values())
@@ -26,11 +25,16 @@ def compute_gini(counts: Counter) -> float:
 
 
 def bucket_confidence(conf: float) -> str:
-    if conf < 0.2: return '[0.0-0.2)'
-    elif conf < 0.4: return '[0.2-0.4)'
-    elif conf < 0.6: return '[0.4-0.6)'
-    elif conf < 0.8: return '[0.6-0.8)'
-    else: return '[0.8-1.0]'
+    if conf < 0.2:
+        return '[0.0-0.2)'
+    elif conf < 0.4:
+        return '[0.2-0.4)'
+    elif conf < 0.6:
+        return '[0.4-0.6)'
+    elif conf < 0.8:
+        return '[0.6-0.8)'
+    else:
+        return '[0.8-1.0]'
 
 
 # === Main analysis logic ===
@@ -71,16 +75,18 @@ def analyze_parsed_entries(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_dir", required=True, help="Directory with input .jsonl files")
+    parser.add_argument("--input_dir", required=True,
+                        help="Directory with input .jsonl files")
     parser.add_argument("--output", required=True, help="Output CSV file path")
-    parser.add_argument("--conf_threshold", type=float, default=0.3, help="Minimum confidence to accept labels")
+    parser.add_argument("--conf_threshold", type=float,
+                        default=0.3, help="Minimum confidence to accept labels")
     args = parser.parse_args()
 
     all_results = []
 
     for filepath in io.listdir_nohidden(args.input_dir):
         entries = automatic_annotation_parser.parse_automatic_annotations(
-            filepath, conf_threshold=args.conf_threshold, verbose=True
+            filepath, conf_threshold=args.conf_threshold, verbose=True,
         )
         if not entries:
             continue
@@ -95,7 +101,8 @@ if __name__ == "__main__":
     if all_results:
         fieldnames = ["level_id", "prompt_id", "total_entries", "avg_predictions_per_entry",
                       "unique_labels", "label_entropy", "label_gini"]
-        fieldnames += [f'conf_{b}' for b in ['[0.0-0.2)', '[0.2-0.4)', '[0.4-0.6)', '[0.6-0.8)', '[0.8-1.0]']]
+        fieldnames += [f'conf_{b}' for b in ['[0.0-0.2)',
+                                             '[0.2-0.4)', '[0.4-0.6)', '[0.6-0.8)', '[0.8-1.0]']]
 
         with open(args.output, 'w', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)

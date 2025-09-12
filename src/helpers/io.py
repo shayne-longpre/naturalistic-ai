@@ -1,47 +1,40 @@
-import os
-import sys
-import gzip
-import shlex
-import subprocess
-import yaml
-import json
-import jsonlines
-import multiprocessing
-import random
-from ast import literal_eval
-import pandas as pd
-import typing
-from collections import defaultdict
-# from semanticscholar import SemanticScholar
+"""Reading and writing utilities."""
+
 import base64
-from PIL import Image
+import gzip
+import json
+import os
+import random
+import typing
 from io import BytesIO
+
+import jsonlines
 import numpy as np
-
-import requests
-from datasets import Dataset, load_dataset
-
-# import src.helpers.constants as constants
-# from . import constants
+import pandas as pd
+import yaml
+from datasets import load_dataset
+from PIL import Image
 
 #############################################################################
-############### Image Reading and Conversion
+# Image Reading and Conversion
 #############################################################################
+
 
 def convert_base64_to_PIL_image(base64_string):
-    
+
     # Remove the metadata part of the Base64 string
     base64_string = base64_string.split(",")[1]
 
     # Decode the Base64 string
     image_data = base64.b64decode(base64_string)
 
-    # Make a PIL Image 
+    # Make a PIL Image
     image = Image.open(BytesIO(image_data))
     return image
 
+
 def convert_base64_to_np_array(base64_string):
-    
+
     # Remove the metadata part of the Base64 string
     base64_string = base64_string.split(",")[1]
 
@@ -57,17 +50,20 @@ def convert_base64_to_np_array(base64_string):
     return np_array
 
 #############################################################################
-############### Local File IO
+# Local File IO
 #############################################################################
+
 
 def listdir_nohidden(path: str) -> typing.List[str]:
     """Returns all non-hidden files within a directory."""
     assert os.path.exists(path) and os.path.isdir(path)
     return [os.path.join(path, f) for f in os.listdir(path) if not f.startswith(".")]
 
-def read_txt(path: str) ->  typing.List[typing.Any]:
+
+def read_txt(path: str) -> typing.List[typing.Any]:
     with open(path, "r", encoding="utf8") as f:
         return [l.strip() for l in f.readlines()]
+
 
 def write_txt(path: str, data: str):
     dirname = os.path.dirname(path)
@@ -76,7 +72,8 @@ def write_txt(path: str, data: str):
     with open(path, "w", encoding="utf8") as outf:
         outf.write(data)
 
-def write_json(data, outpath, compress: bool=False):
+
+def write_json(data, outpath, compress: bool = False):
     dirname = os.path.dirname(outpath)
     if dirname:
         os.makedirs(dirname, exist_ok=True)
@@ -98,10 +95,11 @@ def read_json(inpath: str, verbose=False):
     with open(inpath, 'rt', encoding='UTF-8') as inf:
         return json.load(inf)
 
+
 def write_jsonl(
     data: typing.Union[pd.DataFrame, typing.List[typing.Dict]],
     outpath: str,
-    compress: bool=False,
+    compress: bool = False,
     dumps=None,
 ):
     dirname = os.path.dirname(outpath)
@@ -110,14 +108,16 @@ def write_jsonl(
     if isinstance(data, list):
         if compress:
             with gzip.open(outpath, 'wb') as fp:
-                json_writer = jsonlines.Writer(fp)#, dumps=dumps)
+                json_writer = jsonlines.Writer(fp)  # , dumps=dumps)
                 json_writer.write_all(data)
         else:
             with open(outpath, "wb") as fp:
-                json_writer = jsonlines.Writer(fp) #, dumps=dumps)
+                json_writer = jsonlines.Writer(fp)  # , dumps=dumps)
                 json_writer.write_all(data)
-    else: # Must be dataframe:
-        data.to_json(outpath, orient="records", lines=True, compression="gzip" if compress else "infer")
+    else:  # Must be dataframe:
+        data.to_json(outpath, orient="records", lines=True,
+                     compression="gzip" if compress else "infer")
+
 
 def read_jsonl(inpath: str) -> typing.List[typing.Dict]:
     if inpath[-2:] in ["gz", "gzip"]:
@@ -129,14 +129,14 @@ def read_jsonl(inpath: str) -> typing.List[typing.Dict]:
             j_reader = jsonlines.Reader(fp)
             return [l for l in j_reader]
 
+
 def read_yaml(inpath: str):
     with open(inpath, 'r') as inf:
         return yaml.safe_load(inf)
 
 
-
 #############################################################################
-############### HuggingFace Downloaders
+# HuggingFace Downloaders
 #############################################################################
 
 
@@ -164,13 +164,15 @@ def huggingface_download(
 
     # num_proc = max(multiprocessing.cpu_count() // 2, 1)
     if data_files:
-        dset = load_dataset(data_address, data_files=data_files, use_auth_token=True)
+        dset = load_dataset(data_address, data_files=data_files,
+                            use_auth_token=True)
     elif data_dir:
-        dset = load_dataset(data_address, data_dir=data_dir, use_auth_token=True)
+        dset = load_dataset(data_address, data_dir=data_dir,
+                            use_auth_token=True)
     elif name:
         dset = load_dataset(data_address, name, use_auth_token=True)
     else:
-        dset = load_dataset(data_address) #, use_auth_token=True)
+        dset = load_dataset(data_address)  # , use_auth_token=True)
 
     if split:
         dset = dset[split]

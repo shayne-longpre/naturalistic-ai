@@ -1,19 +1,20 @@
-import os
-import openai
-import json
 import asyncio
+import json
+import os
+
 import aiohttp
+import openai
 import tiktoken
 from dotenv import load_dotenv
 
 
 class GPT(object):
     """
-    This class provides an interface to the OpenAI API to perform text generation tasks using various GPT models. 
-    It allows for synchronous and asynchronous interactions with the API to generate responses for a given prompt 
-    using specified model parameters. The class is designed to handle multiple prompt configurations and includes 
+    This class provides an interface to the OpenAI API to perform text generation tasks using various GPT models.
+    It allows for synchronous and asynchronous interactions with the API to generate responses for a given prompt
+    using specified model parameters. The class is designed to handle multiple prompt configurations and includes
     methods to load environment variables, handle API authentication, and process batches of prompts for efficiency.
-    
+
     Attributes:
         language_code (str): Language of the prompts to be used, default is English ('en').
         model (str): Identifier for the OpenAI GPT model to be used.
@@ -23,7 +24,8 @@ class GPT(object):
         ASSISTANT_PROMPT_1 (str): Assistant's initial response in the conversation flow.
         GUIDELINES_PROMPT_TEMPLATE (str): Loaded guidelines prompt for guiding the assistant's responses.
     """
-    def __init__(self, 
+
+    def __init__(self,
                  base_url='https://api.openai.com/v1/chat/completions',
                  key_env='OPENAI_API_KEY',
                  language='en',
@@ -49,11 +51,10 @@ class GPT(object):
 
         self.SYSTEM_PROMPT = prompt
 
-
         # self.USER_PROMPT_1 = "Are you clear about your role?"
         # if 'system-prompt' in self.prompt_id:
         #     self.SYSTEM_PROMPT = self.load_prompt_from_json()
-        #     self.ASSISTANT_PROMPT_1 = "Yes, and I understand to return only a dictionary with my verdict and exact text from the TOS document as evidence. I will not add any other explanation. Please go ahead and provide me with the TOS document." 
+        #     self.ASSISTANT_PROMPT_1 = "Yes, and I understand to return only a dictionary with my verdict and exact text from the TOS document as evidence. I will not add any other explanation. Please go ahead and provide me with the TOS document."
         #     self.GUIDELINES_PROMPT_TEMPLATE = "Here is the TOS document: {}"
         # else:
         #     self.SYSTEM_PROMPT = "You are a smart and intelligent legal assistant. I will provide you with the Terms of Use/Service document for a website and you will answer legal questions about that document."
@@ -72,12 +73,15 @@ class GPT(object):
     def load_API_key(self, var='OPENAI_API_KEY', base_url='https://api.openai.com/v1/chat/completions'):
         try:
             load_dotenv(dotenv_path='data/.env')
-            openai.api_key = os.environ[var]
-            openai.api_base = base_url
+            self.client = openai.OpenAI(
+                api_key=os.environ[var],
+                # Remove the endpoint part
+                base_url=base_url.rsplit('/chat/completions', 1)[0]
+            )
             print("API key and base_url successfully loaded!")
         except KeyError:
             print(f"Error: {var} environment variable is not set.")
-        except openai.error.AuthenticationError:
+        except openai.AuthenticationError:
             print("Error: Incorrect API key.")
 
     # def load_prompt_from_json(self):
@@ -102,9 +106,9 @@ class GPT(object):
 
     def load_cache(self):
         """
-        Loads the response cache from a JSON file. This method initializes the cache attribute 
-        of the GPT class by attempting to read from a specified file path. If the file does 
-        not exist, it sets the cache to an empty dictionary, effectively starting with no 
+        Loads the response cache from a JSON file. This method initializes the cache attribute
+        of the GPT class by attempting to read from a specified file path. If the file does
+        not exist, it sets the cache to an empty dictionary, effectively starting with no
         cached data.
         """
         try:
@@ -115,11 +119,11 @@ class GPT(object):
 
     def save_cache(self):
         """
-        Saves the current state of the cache to a JSON file. This method writes the contents 
-        of the `cache` attribute to a file specified by `cache_file_path`. The JSON data is 
+        Saves the current state of the cache to a JSON file. This method writes the contents
+        of the `cache` attribute to a file specified by `cache_file_path`. The JSON data is
         formatted with an indentation of 4 spaces, making it human-readable.
         """
-        
+
         os.makedirs(os.path.dirname(self.cache_file_path), exist_ok=True)
 
         with open(self.cache_file_path, 'w') as file:
@@ -142,10 +146,10 @@ class GPT(object):
     def stringify_messages(messages_list):
         """
         Converts a list of message dictionaries into a single string representation.
-        
+
         Args:
             messages (list): A list of dicts with 'role' and 'content' keys.
-            
+
         Returns:
             str: A single string representing the full conversation.
         """
@@ -162,23 +166,24 @@ class GPT(object):
         - str: The response from the OpenAI Chat API containing the completion for the given prompt.
         """
         if final_prompt is not None:
-            messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPT},
-                    # {"role": "user", "content": self.USER_PROMPT_1},
-                    # {"role": "assistant", "content": self.ASSISTANT_PROMPT_1},
-                    {"role": "user", "content": final_prompt}
-                ]
+            messages = [
+                {"role": "system", "content": self.SYSTEM_PROMPT},
+                # {"role": "user", "content": self.USER_PROMPT_1},
+                # {"role": "assistant", "content": self.ASSISTANT_PROMPT_1},
+                {"role": "user", "content": final_prompt}
+            ]
         elif messages_list is not None:
             messages = [{"role": "system", "content": self.SYSTEM_PROMPT},] + messages_list
         else:
             raise ValueError("Either final_prompt or messages_list must be provided.")
-        response = openai.ChatCompletion.create(
+        response = self.client.chat.completions.create(
             model=self.model,
-            temperature=self.temperature,           # lower temperature for more deterministic outputs
+            # lower temperature for more deterministic outputs
+            temperature=self.temperature,
             top_p=self.top_p,                 # lower top_p to decrease randomness
             messages=messages
         )
-        return response['choices'][0]['message']['content'].strip(" \n")
+        return response.choices[0].message.content.strip(" \n")
 
     async def make_openai_request_async(self, session, final_prompt=None, messages_list=None):
         """
@@ -197,25 +202,26 @@ class GPT(object):
             "Content-Type": "application/json",
         }
         if final_prompt is not None:
-            messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPT},
-                    # {"role": "user", "content": self.USER_PROMPT_1},
-                    # {"role": "assistant", "content": self.ASSISTANT_PROMPT_1},
-                    {"role": "user", "content": final_prompt}
-                ]
+            messages = [
+                {"role": "system", "content": self.SYSTEM_PROMPT},
+                # {"role": "user", "content": self.USER_PROMPT_1},
+                # {"role": "assistant", "content": self.ASSISTANT_PROMPT_1},
+                {"role": "user", "content": final_prompt}
+            ]
         elif messages_list is not None:
             messages = [{"role": "system", "content": self.SYSTEM_PROMPT},] + messages_list
         else:
             raise ValueError("Either final_prompt or messages_list must be provided.")
         payload = {
             "model": self.model,
-            "temperature": self.temperature,           # lower temperature for more deterministic outputs
+            # lower temperature for more deterministic outputs
+            "temperature": self.temperature,
             "top_p": self.top_p,                 # lower top_p to decrease randomness
             "messages": messages
         }
         input_token_count = self.count_tokens(final_prompt)
-        self.token_usage["input_tokens"] += input_token_count  # Track input tokens
-
+        # Track input tokens
+        self.token_usage["input_tokens"] += input_token_count
 
         async with session.post(url, json=payload, headers=headers) as response:
             # print(f"status code: {response.status}")
@@ -229,22 +235,21 @@ class GPT(object):
             else:
                 return None
 
-
     async def process_batch_async(self, session, batch, custom_guidelines_prompt=None):
         """
-        Processes a single batch of prompts asynchronously, leveraging caching to optimize API usage. 
-        Before making an API request, the method checks if a response for the formatted prompt is already 
-        stored in the cache. If found, it uses the cached response; otherwise, it sends a request to the 
+        Processes a single batch of prompts asynchronously, leveraging caching to optimize API usage.
+        Before making an API request, the method checks if a response for the formatted prompt is already
+        stored in the cache. If found, it uses the cached response; otherwise, it sends a request to the
         OpenAI API.
 
         Parameters:
         - session (aiohttp.ClientSession): A session object used for making asynchronous HTTP requests.
         - batch (list of str): A list of original prompts to be processed in the batch.
-        - custom_guidelines_prompt (str, optional): A custom prompt template that can be formatted with the 
+        - custom_guidelines_prompt (str, optional): A custom prompt template that can be formatted with the
           original prompt. If provided, it overrides the default guidelines prompt template for this batch.
 
         Returns:
-        - list of str: A list of responses from the OpenAI Chat API. Each response corresponds to a prompt in 
+        - list of str: A list of responses from the OpenAI Chat API. Each response corresponds to a prompt in
           the batch. Responses are retrieved from the cache if available; otherwise, they are fetched from the API.
         """
         responses = []
@@ -264,15 +269,17 @@ class GPT(object):
             input_token_count = self.count_tokens(formatted_prompt)
 
             if prompt_id in self.cache:
-                self.token_usage["cached_input_tokens"] += input_token_count  # Cached input tokens
+                # Cached input tokens
+                self.token_usage["cached_input_tokens"] += input_token_count
                 responses.append(self.cache[prompt_id])
                 print(f"Using cached response for prompt ID: {prompt_id}")
             else:
-                self.token_usage["input_tokens"] += input_token_count  # Normal input tokens
+                # Normal input tokens
+                self.token_usage["input_tokens"] += input_token_count
                 if is_message_list:
                     task = asyncio.create_task(self.make_openai_request_async(session, messages_list=formatted_prompt))
                 else:
-                    task = asyncio.create_task(self.make_openai_request_async(session, formatted_prompt=formatted_prompt))
+                    task = asyncio.create_task(self.make_openai_request_async(session, final_prompt=formatted_prompt))
                 tasks.append((prompt_id, task))
 
         api_responses = await asyncio.gather(*(task[1] for task in tasks))
@@ -284,7 +291,7 @@ class GPT(object):
         self.save_cache()
 
         return responses
-    
+
     def estimate_cost(self):
         """
         Determines which cost estimation to use based on the model and prints cumulative usage.
@@ -296,7 +303,7 @@ class GPT(object):
             self._estimate_cost_o3()
         else:
             print(f"No cost estimator defined for model: {self.model}")
-    
+
     def _estimate_cost_4o(self):
         input_cost = (self.token_usage["input_tokens"] / 1_000_000) * 2.50
         cached_input_cost = (self.token_usage["cached_input_tokens"] / 1_000_000) * 1.25
@@ -321,11 +328,10 @@ class GPT(object):
         print(f"  Output Cost: ${output_cost:.4f}")
         print(f"  Total Cost: ${total_cost:.4f}\n")
 
-
     async def process_prompts_in_batches_async(
-        self, 
-        batch, 
-        batch_size=1, 
+        self,
+        batch,
+        batch_size=1,
         parse_func=None,
     ):
         """
@@ -348,7 +354,8 @@ class GPT(object):
                 try:
                     batch_responses = await self.process_batch_async(session, batch_prompts)
                 except Exception as e:
-                    print(f"Skipping batch due to error: {e}")  # Log the error but continue processing
+                    # Log the error but continue processing
+                    print(f"Skipping batch due to error: {e}")
                     continue  # Move to the next batch
                 parsed_responses = []
                 for response in batch_responses:
@@ -358,8 +365,10 @@ class GPT(object):
                             parsed_response = json.loads(response)
                             parsed_responses.append(parsed_response)
                         except json.JSONDecodeError as e:
-                            print("Failed to parse response:", response, "Error:", e)  # debugging output
-                            parsed_responses.append(response)  # append the unparsed response if parsing fails
+                            print("Failed to parse response:", response,
+                                  "Error:", e)  # debugging output
+                            # append the unparsed response if parsing fails
+                            parsed_responses.append(response)
                     else:
                         parsed_responses.append(response)
 
@@ -369,7 +378,6 @@ class GPT(object):
         self.estimate_cost()
         return parsed_responses
 
-
     def clear_cache(self):
         """
         Clears the entire cache, both in-memory and in the file.
@@ -377,6 +385,5 @@ class GPT(object):
         Returns:
         - None
         """
-        self.cache = {} 
+        self.cache = {}
         self.save_cache()
-        

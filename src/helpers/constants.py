@@ -1,6 +1,8 @@
+"""Constants for the helpers module."""
+
+
 SYSTEM_PROMPTS_FPATH = "data/static/system_prompts.json"
 DETAILED_SYSTEM_PROMPTS_FPATH = "data/static/detailed_system_prompts.json"
-
 
 
 FUNCTION_ANNOTATION_LABEL_ABBREVIATIONS = {
@@ -59,15 +61,15 @@ ANNOTATION_TAXONOMY_REMAPPER = {
     },
     'prompt_media_format': {
         'Code': [
-            'code', 
+            'code',
             'code programming scripts snippets or syntax',
             'code programming scripts snippets or syntax in various programming languages',
             'code programming scripts snippets or syntax in various programming languages which can be any programming language such as python html etc',
         ],
         'Charts / Graphs': ['charts graphs'],
         'Natural Language': [
-            'natural language', 
-            'natural language text in regular written or spoken language used for communication', 
+            'natural language',
+            'natural language text in regular written or spoken language used for communication',
             'natural language text',
         ],
         'Images': ['images'],
@@ -75,7 +77,7 @@ ANNOTATION_TAXONOMY_REMAPPER = {
         'Formatted Enumeration / Itemization': [
             'formatted enumeration itemization structured lists',
             'formatted enumeration itemization',
-            'formatted enumeration itemization bullets lists', 
+            'formatted enumeration itemization bullets lists',
             'formatted enumeration itemizatio',
             'formatted enumeration itemization bullets lists structured lists of items or points presented with formatting like numbers bullets or letters',
             'formatted enumeration itemization structured lists of items or points presented with formatting like numbers bullets or letters e g bullets lists',
@@ -92,7 +94,7 @@ ANNOTATION_TAXONOMY_REMAPPER = {
     },
     'response_media_format': {
         'Code': [
-            'code', 
+            'code',
             'code programming scripts snippets or syntax',
             'code programming scripts snippets or syntax in various programming languages',
             'code programming scripts snippets or syntax in various programming languages which can be any programming language such as python html etc',
@@ -106,7 +108,7 @@ ANNOTATION_TAXONOMY_REMAPPER = {
         'Formatted Enumeration / Itemization': [
             'formatted enumeration itemization structured lists',
             'formatted enumeration itemization',
-            'formatted enumeration itemization bullets lists', 
+            'formatted enumeration itemization bullets lists',
             'formatted enumeration itemizatio',
             'formatted enumeration itemization bullets lists structured lists of items or points presented with formatting like numbers bullets or letters',
             'formatted enumeration itemization structured lists of items or points presented with formatting like numbers bullets or letters e g bullets lists',
@@ -124,7 +126,7 @@ ANNOTATION_TAXONOMY_REMAPPER = {
     "response_interaction_features": {
         "Content: Direct Response": ["content direct response"],
         "Self-Disclosure": ["self disclosure"],
-        "Non-Personalization": [ "non personalization"],
+        "Non-Personalization": ["non personalization"],
         "None": [
             "none"
         ],
@@ -357,7 +359,7 @@ ANNOTATION_TAXONOMY_REMAPPER = {
         'Cyberattacks': [
             'cyberattacks enabling enacting malware computer viruses worms malicious code',
             'content related to cyberattacks enabling enacting malware viruses worms etc',
-            ],
+        ],
         'Weapons Drugs': [
             'weapons drugs'],
         'Apparent attempt to impersonate a real person or organization': [

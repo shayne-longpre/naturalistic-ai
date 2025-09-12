@@ -1,8 +1,11 @@
-import pandas as pd
-from collections import defaultdict
-import json, re, os, random, sys
+"""Utils for Clio scripts."""
 
-sys.path.append("./")
+import json
+import os
+import re
+from collections import defaultdict
+
+import pandas as pd
 
 from src.clio_scripts.clio_constants import CLUSTER_DATA, SKILLS
 
@@ -37,13 +40,13 @@ def get_hierarchical_clusters(file_path=CLUSTER_DATA):
         level_2 = row['cluster_name_2']
         level_1 = row['cluster_name_1']
         level_0 = row['cluster_name_0']
-        
+
         nested_dict[level_2][level_1].append(level_0)
 
     # Optionally convert to regular dict for cleaner printing or saving
     nested_dict = {k: dict(v) for k, v in nested_dict.items()}
     return nested_dict
-    
+
 
 def get_task_classification_prompt(options_str):
     """
@@ -51,7 +54,7 @@ def get_task_classification_prompt(options_str):
     Prompt is based on the original paper: https://arxiv.org/abs/2503.04761
     """
     # commenting out the random sampling of options_str to increase the use of cache
-    #options_str = "\n".join(random.sample(options_str, len(options_str)))
+    # options_str = "\n".join(random.sample(options_str, len(options_str)))
     options_str = "\n".join(options_str)
     return f"""Consider the following list of classification options:
 
@@ -66,7 +69,7 @@ What is the answer? You MUST provide an option exactly as written above. If mult
 
 
 def get_occupational_check_prompt():
-    return """Your job is to answer this question about the preceding conversation: 
+    return """Your job is to answer this question about the preceding conversation:
 
 <question>
 Does the conversation possibly involve an occupational task?
@@ -74,6 +77,7 @@ Does the conversation possibly involve an occupational task?
 
 What is the answer? You MUST answer either only "Yes" or "No". Provide the answer in <answer> tags with no other commentary.
 """
+
 
 def get_skill_classification_prompt(options_str):
     """
@@ -99,22 +103,22 @@ def get_clio_message(conversation, content):
 
     Args:
         content (str): The content of the message.
-        
+
     Returns:
         dict: A dictionary with the message content.
     """
     message = [
-    {"role": "user", "content": f"The following is a conversation between an AI assistant and a user:\n{conversation}"},
-    {"role": "assistant", "content":"I understand"},
-    {"role": "user", "content":content}
-]   
+        {"role": "user", "content": f"The following is a conversation between an AI assistant and a user:\n{conversation}"},
+        {"role": "assistant", "content": "I understand"},
+        {"role": "user", "content": content}
+    ]
     return message
 
 
 def load_existing_annotations(filepath):
     if not os.path.exists(filepath):
         return dict()
-    
+
     existing_annotations = dict()
     with open(filepath, 'r', encoding='utf-8') as f:
         for line in f:
@@ -127,7 +131,7 @@ def load_existing_annotations(filepath):
 def init_clio_annotation_dict():
     """
     Initializes a dictionary to store CLIO annotations.
-    
+
     Returns:
         dict: An empty dictionary to store CLIO annotations.
     """
@@ -138,7 +142,7 @@ def init_clio_annotation_dict():
         "cluster_bottom": "",
         "occupational_skills": "",
     }
-        
+
 
 def extract_answer_from_response(response, clio_annotation):
     """
@@ -157,7 +161,7 @@ def extract_answer_from_response(response, clio_annotation):
         else:
             return "Parsing error: <answer> format is not correct or missing."
     elif clio_annotation == "occupational_skills":
-        return response.strip() 
+        return response.strip()
 
 
 def assign_answer_to_annotation(annotation, response, clio_annotation):
@@ -186,21 +190,22 @@ def get_task_list(annotation):
             ordered_keys.append(annotation[cluster])
     return ordered_keys
 
+
 def get_next_keys(annotation):
     clio_tasks_dict = get_hierarchical_clusters()
     ordered_keys = get_task_list(annotation)
 
     if len(ordered_keys) == 3:
-        return [] # no more tasks to classify
+        return []  # no more tasks to classify
     else:
         for idx, key in enumerate(ordered_keys):
-            try :
+            try:
                 clio_tasks_dict = clio_tasks_dict[key]
             except KeyError:
                 print(f"KeyError: {key} not found in clio_tasks_dict. Returning empty list.")
                 return []
         return clio_tasks_dict if isinstance(clio_tasks_dict, list) else list(clio_tasks_dict.keys())
-    
+
 
 def format_samples_per_clio_annotation(samples, metadatas, conversation_ids, clio_annotations, annotation_key):
     """

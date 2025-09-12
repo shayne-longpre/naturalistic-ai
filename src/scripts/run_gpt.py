@@ -1,17 +1,19 @@
-import os
-import sys
-import json
-import asyncio
+"""Run GPT."""
+
 import argparse
+import asyncio
+import json
 import string
-import pandas as pd
 from collections import defaultdict
 
-# Preliminaries
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import pandas as pd
 
-from utils import load_existing_exid_turn_pairs, batch_generator, append_jsonl
 from src.helpers import gpt, io
+from src.scripts.utils import (
+    append_jsonl,
+    batch_generator,
+    load_existing_exid_turn_pairs,
+)
 
 
 def make_prompt(args, include_prev_turn=True):
@@ -19,10 +21,10 @@ def make_prompt(args, include_prev_turn=True):
     OPTIONS = io.read_json("src/scripts/taxonomy_options.json")
 
     PREAMBLE = f"""You are a high-quality annotation assistant. Your task is to annotate conversation logs between users and AI chatbots. You will be given a specific task description, all possible label options for the task, and a part of the conversation, including the user prompt and model response from both previous and current turns. These might be pulled from any part of a multi-turn conversation. As a high-quality annotator you will diligently provide annotations on the current turn that are:
-1. Comprehensive: You will list all relevant annotations as the tasks can be multi-class (only one label is true) or multi-label (multiple categories can be true at once). Pay special attention to subtle, or implied properties of the input conversation. 
+1. Comprehensive: You will list all relevant annotations as the tasks can be multi-class (only one label is true) or multi-label (multiple categories can be true at once). Pay special attention to subtle, or implied properties of the input conversation.
 2. Precise: You must answer as a JSON list of dictionaries of exact labels name(s) without any additional explanation, reasoning, or text.
 The conversation log is enclosed between <START_CONVERSATION> and <END_CONVERSATION> tags. The previous turn is included as JSON between <START_PREVIOUS_TURN> and <END_PREVIOUS_TURN> when available; if not present, the current turn is the first part of the conversation. The current turn is always enclosed between <START_CURRENT_TURN> and <END_CURRENT_TURN>.
-While the previous conversation turn may be provided for context, generate an annotation only for the current {args.level_id}. 
+While the previous conversation turn may be provided for context, generate an annotation only for the current {args.level_id}.
 Only use information present or inferable from the input. Avoid hallucinations or unjustified assumptions."""
 
     JSON_INSTRUCTION = "Return the answer as a JSON list of dictionaries, each with the fields 'labels' (exact label name(s) before ':' and after '- '). Do not include any explanation, reasoning, or additional text."
@@ -31,7 +33,7 @@ Only use information present or inferable from the input. Avoid hallucinations o
     options = OPTIONS[args.level_id][args.prompt_id]
 
     previous_turn_block = (
-    "<START_PREVIOUS_TURN>\n{prev_text}\n<END_PREVIOUS_TURN>\n\n"
+        "<START_PREVIOUS_TURN>\n{prev_text}\n<END_PREVIOUS_TURN>\n\n"
         if include_prev_turn else ""
     )
 
@@ -310,9 +312,8 @@ def extract_samples_and_metadata(args, dataframe, existing_pairs):
     return sample, metadata, order_ids, turn_ids
 
 
-
 async def run_gpt(args, batch_size=1):
-    existing_ex_ids = load_existing_exid_turn_pairs(args.save)   
+    existing_ex_ids = load_existing_exid_turn_pairs(args.save)
     dataframe = pd.read_json(args.input, orient="records")
     formatted_prompts, metadata, order_ids, turn_ids = extract_samples_and_metadata(args, dataframe, existing_ex_ids)
     print(f"Formatted prompts: {len(formatted_prompts)}, Metadata: {len(metadata)}")
@@ -334,7 +335,7 @@ async def run_gpt(args, batch_size=1):
         except Exception as e:
             print(f"Error processing batch: {e}")
             continue
-        
+
         batch_output = []
         print("Prompt: ", batch[0])
         for response, meta, order_id, turn_id in zip(batch_responses, meta_batch, order_id_batch, turn_id_batch):
@@ -342,7 +343,7 @@ async def run_gpt(args, batch_size=1):
 
             if response is None:
                 print(f"[Error] Skipping saving due to failed response for order {order_id}, turn {turn_id}, ex_id: {meta['ex_id']}")
-                with open(args.save.replace('.jsonl', '-failed.jsonl'), 'a') as f:
+                with open(args.save.replace('.jsonl', '-failed.jsonl'), 'a', encoding='utf-8') as f:
                     f.write(json.dumps({
                         **meta,
                         "model_id": args.model_id,
@@ -372,15 +373,20 @@ async def run_gpt(args, batch_size=1):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", type=str, required=True, help="Path to the input json file.")
+    parser.add_argument("--input", type=str, required=True,
+                        help="Path to the input json file.")
     parser.add_argument("--input_format", type=str, required=True, default=None)
     parser.add_argument("--level_id", type=str, required=True, default=None)
     parser.add_argument("--prompt_id", type=str, required=True, default=None)
-    parser.add_argument("--model_id", type=str, required=True, default=None, choices=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o3-mini", "gpt-4.1"])
+    parser.add_argument("--model_id", type=str, required=True, default=None, choices=[
+                        "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o3-mini", "gpt-4.1"])
     parser.add_argument("--save", type=str, required=True, help="Save path.")
-    parser.add_argument("--version", type=str, required=True, help="Version to save cache file.")
-    parser.add_argument("--inst_first", action="store_true", help="True for [general instruction, task-specific instruction, conversation], False for [conversation, general-instruction, task-specific instruction]")
-    parser.add_argument("--multi_hist", action="store_true", help="True for using multiple history and False for using 1 previous conversation turn.")
+    parser.add_argument("--version", type=str, required=True,
+                        help="Version to save cache file.")
+    parser.add_argument("--inst_first", action="store_true",
+                        help="True for [general instruction, task-specific instruction, conversation], False for [conversation, general-instruction, task-specific instruction]")
+    parser.add_argument("--multi_hist", action="store_true",
+                        help="True for using multiple history and False for using 1 previous conversation turn.")
 
     args = parser.parse_args()
 
