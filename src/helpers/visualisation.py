@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from tabulate import tabulate
 from collections import Counter, defaultdict
+import plotly.graph_objects as go
 
 sys.path.append("./")
 
@@ -429,3 +430,107 @@ def plot_differences_for_group(
         for k, v in metrics.items():
             print(f"   {k}: {v}")
         print("-" * 50)
+
+
+
+def make_tree_plot(category_counts: typing.Dict[str, int], parent_dict: typing.Dict[str:str], save_path:str=None, split_lines_display:bool=False, print_counts:bool=False):
+    """
+    Create a treemap visualization using Plotly to show hierarchical category distributions.
+    Args:
+        category_counts (dict): Dictionary with category names as keys and their counts as values.
+        parent_dict (dict): Dictionary mapping parent categories to lists of their child categories.
+        save_path (str, optional): If provided, save the treemap image to this path
+        split_lines_display (bool): If True, split long category labels into multiple lines for better display.
+        print_counts (bool): If True, print out the counts for each label for debugging purposes
+    Returns:
+        values (list): List of counts corresponding to each label.
+        parents (list): List of parent labels corresponding to each label.
+        labels (list): List of all labels (both parents and children).
+        fig (plotly.graph_objects.Figure): The Plotly treemap figure object.
+
+    Example dictionaries as input:
+    category_counts = {
+        'Apples': 150,
+        'Bananas': 100,
+        'Broccoli': 80,
+        }
+    parent_dict = {
+        'Fruits': ['Apples', 'Bananas'],
+        'Vegetables': ['Broccoli'],
+        }
+
+    """
+    labels = []
+    parents = []
+    values = []
+
+    # If desired, replace any commas in child labels with <br> for better display in Plotly. This breaks up a long label into multiple lines. 
+    def format_label(label):
+        label = label.replace(',', '')
+        label = label.replace('/', '')
+        return label.replace(' ', '<br>')#.replace('&', '<br>&')
+
+    # Prepare formatted parent_dict for label mapping (only format children)
+    if split_lines_display:
+        formatted_parent_dict = {parent: [format_label(child) for child in children] for parent, children in parent_dict.items()}
+
+    # Use formatted labels for all further processing
+    labels = []
+    parents = []
+    values = []
+
+    # Build a reverse mapping from subcategory to parent (with formatted child labels)
+    child_to_parent = {}
+    for parent, children in formatted_parent_dict.items():
+        for child in children:
+            child_to_parent[child] = parent
+
+    # Find which parents have at least one child in category_counts (to avoid plotting empy boxes)
+    parents_with_children = set()
+    for cat in category_counts:
+        formatted_cat = format_label(cat)
+        parent = child_to_parent.get(formatted_cat)
+        if parent is not None:
+            parents_with_children.add(parent)
+
+    # Add only those parent nodes to the labels, parents, and values lists
+    for parent in parents_with_children:
+        labels.append(parent)
+        parents.append('')
+        values.append(0)
+
+    # Add all categories in category_counts (children)
+    for cat, count in category_counts.items():
+        formatted_cat = format_label(cat)
+        parent = child_to_parent.get(formatted_cat)
+        if parent is not None:
+            labels.append(formatted_cat)
+            parents.append(parent)
+            values.append(count)
+        else:
+            print(f"Warning: Category '{cat}' has no parent in parent_dict. Skipping it.") 
+    
+    #For debugging, print out the counts for each label.
+    if print_counts:
+        for lbl, val in zip(labels, values):
+            print(f"{lbl}: {val}")
+
+    # Create the treemap figure
+    fig = go.Figure(go.Treemap(
+        labels=labels,
+        parents=parents,
+        values=values,
+        textinfo="label+percent entry",
+    ))
+    
+    fig.update_traces(textfont_size=20)
+    fig.update_layout(width=2000, height=1400)
+  
+    if save_path is not None:
+        fig.write_image(save_path)
+
+    return values, parents, labels, fig
+
+
+
+
