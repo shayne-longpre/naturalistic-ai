@@ -9,6 +9,7 @@ import seaborn as sns
 from tabulate import tabulate
 from collections import Counter, defaultdict
 import plotly.graph_objects as go
+import plotly.express as px
 
 sys.path.append("./")
 
@@ -606,4 +607,72 @@ def make_spider_plot(data_to_compare, parent_dict = None, title = "", save_path 
 
     return fig
 
+def make_heatmap(comparisons:dict[str:dict[str:int]], baseline:dict[str:int], title:str, save_path:str = None, fig_width:int = 800):
+    """
+    This function produces a heatmap used plot the difference of several datasets to a single baseline. Each row represents a dataset and each column represents a category. 
+    The value plotted in the heatmap is the numerical difference between the comparion datasets' value for that category and the baseline's value for that category. 
 
+    Inputs:  
+    Comparisons is a dictionary structured as name => dictionary of categories and counts. Each item in this dictionary represents a row of the heatmap. 
+    The baseline is a single dictionary of categories to counts. The baseline's keys (categories) are used throughout. 
+    Each row will be titled by the name in the comparisons dict automatically, and the figure is titled with the title string provided. 
+    
+    """
+    all_keys = set(baseline.keys()) # these will each be a column
+    for comp_dict in comparisons.values():
+        all_keys.update(comp_dict.keys())
+
+    # Ensure all dicts have all keys, fill missing with 0
+    baseline = {k: baseline.get(k, 0) for k in sorted(all_keys)}
+    for name in comparisons:
+        comparisons[name] = {k: comparisons[name].get(k, 0) for k in sorted(all_keys)}
+
+    # Create a matrix where each row is the difference between a comparison dict and the baselin
+    z = []
+    names = []
+    for name, comp in comparisons.items():
+        diff = {k: (comp[k] - baseline[k] ) for k in baseline.keys()}
+        z.append([diff[k] for k in sorted(diff.keys())])
+        names.append(name)
+
+
+    # Colorscale for range -2000 to 2000, with 0 as grey
+    colorscale = [
+        [0.0, "darkblue"],        # -2000
+        [0.4, "lightsteelblue"], # -1000
+        [0.5, "lightgrey"],       # 0
+        [0.9, "salmon"],         # +1000
+        [1.0, "red"]              # +2000
+    ]
+
+    fig = px.imshow(
+        z,
+        text_auto=True,
+        x=sorted(baseline.keys()),
+        y=names,
+        color_continuous_scale=colorscale,
+        zmin=-1000,
+        zmax=1000
+    )
+
+    fig.update_layout(coloraxis_colorscale=colorscale)
+    fig.update_xaxes(tickangle=0)
+    fig.update_xaxes(
+        ticktext=[
+            label.replace(' and ', ' and<br>').replace('&', '&<br>') if 'and' in label else label.replace('&', '&<br>')
+            for label in fig.layout.xaxis.ticktext or fig.data[0].x
+        ],
+        tickvals=list(range(len(fig.data[0].x)))
+    )
+    fig.update_xaxes(title_font=dict(size=24))
+    fig.update_yaxes(title_font=dict(size=24))
+    fig.update_layout(
+        width=fig_width,
+        height=600
+    )
+    fig.update_layout(title_text=title, title_x=0.5)
+    fig.update_layout(xaxis_side="top")
+    if save_path:
+        fig.write_image(save_path)
+
+    fig.show()
