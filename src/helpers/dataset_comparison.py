@@ -6,6 +6,7 @@ from src.classes.conversation import Conversation
 from scipy.stats import chi2_contingency, wasserstein_distance, ks_2samp
 from scipy.spatial.distance import jensenshannon
 import numpy as np
+import ast
 
 
 def split_dataset_by(
@@ -220,3 +221,52 @@ def compare_annotations_to_baseline(
         comparison_results[group_name] = group_results
 
     return comparison_results
+
+f
+# Helper to split annotation keys if they are lists in string form
+def correct_list_if_read_as_string(key:str):
+    """This function is used to clean annotations in which multiple labels are stored as a stringified list. This occurs frequently, as examples with multiple labels are stored as lists, and JSON serialization stores these as strings.
+    If a list is given, and it is stringified, the list is parsed and returns the corrected list object of individual string entries. 
+    If a standard correct list of strings is given, it is returned as-is
+    If any other object is given, it is returned as a single-item list.
+    """
+    try:
+        # Try to parse as a Python list. If 
+        items = ast.literal_eval(key)
+        if isinstance(items, list):
+            a =[str(item).strip() for item in items if str(item).strip()]
+            return a
+        else:
+            return [key]
+    except Exception:
+        return [key]
+
+
+### These are plotting helpers, used by the visualizations.py script to help aggregate and group annotation counts for abstracted plotting.
+
+def aggregate_counts_by_category(annotation_pairs: Dict[str, int]):
+    """Aggregate counts of individual categories from annotation pairs where keys may be lists of categories.
+    This function handles cases where multiple categories are stored as stringified lists, and provides 0 values for unrepresented values. 
+    """
+    category_counts = {}
+    for key, count in annotation_pairs.items():
+        categories = correct_list_if_read_as_string(key)
+        for cat in categories:
+            if cat == '' or cat.lower() == 'none':
+                continue
+            category_counts[cat] = category_counts.get(cat, 0) + count
+    return category_counts
+
+def group_counts_into_parent_categories(count_dict, parent_dict):
+    """
+    This function takes in a dictionary of annotation counts, and a parent dictionary to map them into. 
+    Keys are mapped according to parent-child mapping in the parent_dict. 
+    This function returns a dictionary with the same keys as the parent_dict (if values are found), and the values are the combined counts of child categories. 
+    """
+    grouped_counts = defaultdict(int)
+    for parent, children in parent_dict.items():
+        for child in children:
+            if child in count_dict:
+                grouped_counts[parent] += count_dict[child]
+
+    return grouped_counts

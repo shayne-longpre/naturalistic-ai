@@ -13,7 +13,7 @@ import plotly.graph_objects as go
 sys.path.append("./")
 
 from src.helpers.constants import FUNCTION_ANNOTATION_LABEL_ABBREVIATIONS
-
+from src.helpers.dataset_comparison import aggregate_counts_by_category, group_counts_into_parent_categories
 
 def barplot_distribution(
     data: typing.Union[typing.Dict[str, int], typing.Dict[str, typing.Dict[str, int]]],
@@ -532,5 +532,78 @@ def make_tree_plot(category_counts: typing.Dict[str, int], parent_dict: typing.D
     return values, parents, labels, fig
 
 
+def make_spider_plot(data_to_compare, parent_dict = None, title = "", save_path = None):
+    """
+    This function takes in a dictionary of the category counts from 1+ datasets, whose values are plotted in a spider plot and named according to the key. 
+    If desired, a parent_dict can be applied to aggregate the categories into more abstract groups. 
+    If desired, a title can be specified. 
+
+    Example Input: 
+    data_to_compare = {
+        'dataset1': {'apples': 19, 'bananas: 42, 'broccoli': 10}, 
+        'dataset2': {'apples': 27, 'bananas: 21, 'broccoli: 12 }, 
+    }
+    parent_dict = {
+        'fruits': ['apples', 'bananas'], 
+        'vegetables': ['broccoli'],
+    }
+    title = "Dataset 1 vs Dataset 2, Amount of Fruits and Vegetables "
+
+    """
+
+    categories =list(next(iter(data_to_compare.values())).keys())
+    
+    if parent_dict is not None:
+        grouped_data_to_compare = {
+            name: group_counts_into_parent_categories(count_dict, parent_dict=parent_dict)
+            for name, count_dict in data_to_compare.items()
+        }
+        # Use the keys from the first dataset in grouped_data_to_compare for categories
+        categories = list(next(iter(grouped_data_to_compare.values())).keys())
+        data_to_compare = grouped_data_to_compare
+
+
+    # Remove categories where all datasets have 0 occurrences
+    categories_to_keep = [
+        cat for cat in categories
+        if any(data_to_compare[ds].get(cat, 0) > 0 for ds in data_to_compare)
+    ]
+    categories = categories_to_keep
+
+    # Prepare values for each dataset
+    values_to_plot = {}
+
+    for dataset_name, agg_wc in data_to_compare.items():
+        print(f"Processing dataset: {dataset_name}")
+        values = [agg_wc.get(cat, 0) for cat in categories]
+        if len(values) >= 1:
+            values += [values[0]]  # Close the loop for the radar plot
+        values_to_plot[dataset_name] = values
+
+    # Make scatterpolar 
+    fig = go.Figure(
+        data=[ 
+            go.Scatterpolar(
+                r=v,
+                theta=categories,
+                fill='toself',
+                name=k
+            ) for k, v in values_to_plot.items()
+        ]
+    )
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True)
+        ),
+        title=f"{title}",
+        showlegend=True,
+        width=1500,
+        height=800
+    )
+    fig.show()
+    if save_path is not None: 
+        fig.write_image(save_path)
+
+    return fig
 
 
