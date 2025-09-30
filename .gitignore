@@ -162,4 +162,8 @@ cython_debug/
 #.idea/
 
 dataset_downloads/
-playground.ipynb
+playground*
+.*
+data/*
+datasets/*
+annotations/*
