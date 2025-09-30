@@ -14,8 +14,9 @@ sys.path.append("./")
 from src.classes.conversation import Conversation
 from src.classes.dataset import Dataset
 
-from helpers import io
+from src.helpers import io
 import uuid
+import requests, json
 
 """
 This file is used to download and format datasets in a common format (list of Conversation objects). 
@@ -24,6 +25,10 @@ See arg description for specifics.
 """
 
 def download_lmsys_1m():
+    """
+    Huggingface: https://huggingface.co/datasets/lmsys/lmsys-chat-1m
+    Lymsys Chat 1M is a dataset of 1 million conversations between humans and various AI models collected from the LMSYS platform.
+    """
     print("\nDownloading lmsys-chat-1m...")
     # https://huggingface.co/datasets/lmsys/lmsys-chat-1m
     dset = io.huggingface_download('lmsys/lmsys-chat-1m', split='train')
@@ -54,6 +59,10 @@ def download_lmsys_1m():
 
 # Download WildChat
 def download_wildchat_v1():
+    """
+    Huggingface: https://huggingface.co/datasets/allenai/WildChat-1M
+    WildChat is a dataset of conversations between humans and various AI models collected from the WildChat platform. This is the public set. 
+    """
     print("Starting Download for WildChat-1M...")
     dset = io.huggingface_download("allenai/WildChat-1M", split="train")
 
@@ -86,6 +95,10 @@ def download_wildchat_v1():
 
 # Download WildChat (private repo)
 def download_wildchat_private(sample=None):
+    """
+    Huggingface: https://huggingface.co/datasets/yuntian-deng/WildChat-1M-Full-with-parameters-internal
+    WildChat is a dataset of conversations between humans and various AI models collected from the WildChat platform. This is the private set. 
+    """
     print("Starting Download for Yuntian's WildChat-1M-Full...")
     dset = io.huggingface_download("yuntian-deng/WildChat-1M-Full-with-parameters-internal", split="train", sample=sample)
 
@@ -121,6 +134,10 @@ def download_wildchat_private(sample=None):
 
 # Download ShareGPT
 def download_sharegpt_v1():
+    """
+    Huggingface: https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered
+    ShareGPT is a dataset of conversations between humans and GPT-based models collected from the ShareGPT platform.
+    """
     print("Starting Download for ShareGPT...")
     # unfiltered: https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered
     sharegpt_dir = "anon8231489123/ShareGPT_Vicuna_unfiltered"
@@ -167,6 +184,10 @@ def download_sharegpt_v1():
 
 # Download ChatBotArena 
 def download_chatbot_arena():
+    """
+    Huggingface: https://huggingface.co/datasets/lmsys/chatbot_arena_conversations
+    Chatbot Arena is a dataset of conversations between different chatbots and human judges.
+    """
     print("Starting Download for ChatBotArena...")
     dset = io.huggingface_download("lmsys/chatbot_arena_conversations", split="train")
 
@@ -226,6 +247,10 @@ def download_chatbot_arena():
 
 # Download Alpaca Eval
 def download_alpaca_eval():
+    """
+    Huggingface: https://huggingface.co/datasets/tatsu-lab/alpaca_eval
+    Aplaca Eval is a benchmark for evaluating instruction-following models. It contains instructions as prompts.
+    """
     print("Starting Download for AlpacaEval..")
     dset = load_dataset("tatsu-lab/alpaca_eval", split = "eval", trust_remote_code=True, token = True) #TODO integrate this with io helpers
 
@@ -261,10 +286,27 @@ def download_alpaca_eval():
 
 # Download MMLU
 def download_mmlu():
+    """
+    Huggingface: https://huggingface.co/datasets/tasksource/mmlu
+    MMLU is a multiple-choice benchmark dataset for measuring model performance across a diverse set of subjects.
+    """
     print("Starting Download for MMLU...")
     # ['question', 'choices', 'answer'],
-    categories = ['abstract_algebra', 'anatomy', 'astronomy', 'business_ethics', 'clinical_knowledge', 'college_biology', 'college_chemistry', 'college_computer_science', 'college_mathematics', 'college_medicine', 'college_physics', 'computer_security', 'conceptual_physics', 'econometrics', 'electrical_engineering', 'elementary_mathematics', 'formal_logic', 'global_facts', 'high_school_biology', 'high_school_chemistry', 'high_school_computer_science', 'high_school_european_history', 'high_school_geography', 'high_school_government_and_politics', 'high_school_macroeconomics', 'high_school_mathematics', 'high_school_microeconomics', 'high_school_physics', 'high_school_psychology', 'high_school_statistics', 'high_school_us_history', 'high_school_world_history', 'human_aging', 'human_sexuality', 'international_law', 'jurisprudence', 'logical_fallacies', 'machine_learning', 'management', 'marketing', 'medical_genetics', 'miscellaneous', 'moral_disputes', 'moral_scenarios', 'nutrition', 'philosophy', 'prehistory', 'professional_accounting', 'professional_law', 'professional_medicine', 'professional_psychology', 'public_relations', 'security_studies', 'sociology', 'us_foreign_policy', 'virology', 'world_religions']
-
+    categories = [
+            "abstract_algebra", "anatomy", "astronomy", "business_ethics", "clinical_knowledge",
+            "college_biology", "college_chemistry", "college_computer_science", "college_mathematics",
+            "college_medicine", "college_physics", "computer_security", "conceptual_physics",
+            "econometrics", "electrical_engineering", "elementary_mathematics", "formal_logic",
+            "global_facts", "high_school_biology", "high_school_chemistry", "high_school_computer_science",
+            "high_school_european_history", "high_school_geography", "high_school_government_and_politics",
+            "high_school_macroeconomics", "high_school_mathematics", "high_school_microeconomics",
+            "high_school_physics", "high_school_psychology", "high_school_statistics", "high_school_us_history",
+            "high_school_world_history", "human_aging", "human_sexuality", "international_law", "jurisprudence",
+            "logical_fallacies", "machine_learning", "management", "marketing", "medical_genetics",
+            "miscellaneous", "moral_disputes", "moral_scenarios", "nutrition", "philosophy", "prehistory",
+            "professional_accounting", "professional_law", "professional_medicine", "professional_psychology",
+            "public_relations", "security_studies", "sociology", "us_foreign_policy", "virology", "world_religions"
+        ]
     choice_indiciators = ["a)", "b)", "c)", "d)", "e)", "f)", "g)", "h)", "i)", "j)", "k)", "l)", "m)", "n)", "o)", "p)", "q)", "r)", "s)", "t)", "u)", "v)", "w)", "x)", "y)", "z)"]
 
     def process_data(datum):
@@ -297,6 +339,10 @@ def download_mmlu():
 
 # Download HLE
 def download_hle():
+    """
+    Huggingface: https://huggingface.co/datasets/cais/hle
+    Humanity's Last Exam is a dataset of very challenging problems designed to be "the final closed-ended academic benchmark of its kind with broad subject coverage" (from huggingface). 
+    """
     print("Starting Download for HLE (Humanity's Last Exam)...")
     dset = io.huggingface_download('cais/hle', split='test')
 
@@ -325,6 +371,10 @@ def download_hle():
 
 # Download GPQA
 def download_gpqa():
+    """
+    Huggingface: https://huggingface.co/datasets/Idavidrein/gpqa
+    The dataset contains graduate-level multiple choice questions with 4 answer options. We shuffle the answer order. 
+    """
     print("Starting Download for GPQA...")
     dset = io.huggingface_download('Idavidrein/gpqa', 'gpqa_extended', split="train")
 
@@ -364,6 +414,10 @@ def download_gpqa():
 
 # Download SWE-Bench
 def download_swebench():
+    """
+        Huggingface: https://huggingface.co/datasets/princeton-nlp/SWE-bench
+        The dataset contains github repository issues and their solution. The model is given the problem, the repo, and the base commit. 
+    """
     print("Starting Download for SWE Bench...")
     dset = io.huggingface_download('princeton-nlp/SWE-bench', split="test")
 
@@ -391,6 +445,406 @@ def download_swebench():
     
     return [process_data(datum) for datum in tqdm(dset, desc="Processing GPQA")]
 
+# Download MBPP 
+def download_mbpp():
+    """
+    Huggingface: https://huggingface.co/datasets/mbpp
+    This dataset contains 1000 Python programming problems that are crowd-sourced and designed to be solvable by entry-level programmers.
+    """
+    print("Starting Download for MBPP...")
+    # Download the MBPP dataset using the io helper (assumes the dataset is hosted on Hugging Face)
+    dset = io.huggingface_download("mbpp", split="test")
+    
+    def process_data(datum):
+        conversation = [
+            {
+                "role": "user",
+                "turn": 0,
+                "content": datum.get("text", "") + datum.get("code", ""),
+                "image": "",
+            }
+        ]
+
+        conversation_id = "mbpp_" + str(uuid.uuid4()).replace("-", "")
+        
+        return Conversation(
+            conversation_id=conversation_id,
+            dataset_id="mbpp",
+            user_id=None,
+            time=None,
+            model=None,
+            conversation=conversation,
+            geography="Unknown"
+        )
+        
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing MBPP")]
+
+def download_humaneval():
+    """
+     Huggingface: https://huggingface.co/datasets/openai/openai_humaneval
+     The dataset contains coding problems. We use the test set here.
+    """
+    print("Starting Download for HumanEval...")
+    dset = io.huggingface_download("openai/openai_humaneval", split="test")
+
+    def process_data(datum):
+        conv = [
+            {
+                "role": "user",
+                "turn": 0,
+                "content": datum.get("prompt", ""),
+                "image": "",
+            }
+        ]
+        return Conversation(
+            conversation_id="humaneval_" + str(uuid.uuid4()).replace("-", ""),
+            dataset_id="humaneval",
+            user_id=None,
+            time=None,
+            model=None,
+            conversation=conv,
+            geography="Unknown"
+        )
+
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing HumanEval")]
+
+def download_gsm8k():
+    """
+    Huggingface: https://huggingface.co/datasets/openai/gsm8k
+    The dataset contains grade school math problems. We use the test set here.
+    """
+    print("Starting Download for GSM8K...")
+    dset = load_dataset("openai/gsm8k", "main", split = "test")
+
+    def process_data(datum):
+        conv = [
+            {
+                "role": "user",
+                "turn": 0,
+                "content": datum.get("question", ""),
+                "image": "",
+            }
+        ]
+        return Conversation(
+            conversation_id="gsm8k_" + str(uuid.uuid4()).replace("-", ""),
+            dataset_id="gsm8k",
+            user_id=None,
+            time=None,
+            model=None,
+            conversation=conv,
+            geography="Unknown"
+        )
+
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing GSM8K")]
+
+def download_bbh():
+    """
+     Huggingface: https://huggingface.co/datasets/lukaemon/bbh
+     The dataset contains big bench hard, which is split between problems in boolean expressions, causal_judgement, and date_understanding. 
+     We combine these and label with the category in the conversation id.  
+    """
+    print("Starting Download for BBH (lukaemon/bbh)...")
+    categories = ["boolean_expressions", "causal_judgement", "date_understanding"]
+    conversations_to_return = []
+    for category in categories:
+        dset = io.huggingface_download("lukaemon/bbh", category, split ="test")
+        for datum in tqdm(dset, desc=f"Processing BBH {category}"):
+            conversation = [
+                {
+                    "role": "user",
+                    "turn": 0,
+                    "content": datum.get("input", ""),
+                    "image": "",
+                }
+            ]
+            conv = Conversation(
+                conversation_id=f"bbh_{category}_" + str(uuid.uuid4()).replace("-", ""),
+                dataset_id="bbh",
+                user_id=None,
+                time=None,
+                model=None,
+                conversation=conversation,
+                geography="Unknown"
+            )
+            conversations_to_return.append(conv)
+    return conversations_to_return
+
+def download_mmlupro():
+    """
+     Huggingface: https://huggingface.co/datasets/TIGER-Lab/MMLU-Pro
+     The dataset contains more difficult questions than the original MMLU. We use the test set here.
+    """
+    print("Starting Download for MMLU-Pro...")
+    choice_indicators = ["a)", "b)", "c)", "d)", "e)", "f)", "g)", "h)", "i)", "j)", "k)", "l)", "m)", "n)", "o)", "p)", "q)", "r)", "s)", "t)", "u)", "v)", "w)", "x)", "y)", "z)"]
+    
+    def process_data(datum):
+        # Construct the question string with choices similar to the MMLU script.
+        question_text = datum.get("question", "")
+        choices = datum.get("choices", [])
+        choices_text = " ".join(f"{choice_indicators[i]} {choices[i]}" for i in range(len(choices)))
+        conv = [
+            {
+                "role": "user",
+                "turn": 0,
+                "content": question_text + " " + choices_text,
+                "image": "",
+            }
+        ]
+        return Conversation(
+            conversation_id="mmlupro_" + str(uuid.uuid4()).replace("-", ""),
+            dataset_id="mmlupro",
+            user_id=str(uuid.uuid4()).replace("-", ""),
+            time=None,
+            model=None,
+            conversation=conv,
+            geography="Unknown"
+        )
+    
+    conversations = []
+    dset = load_dataset("TIGER-Lab/MMLU-Pro", split = "test", token=True)
+    for datum in tqdm(dset, desc="Processing MMLU-Pro"):
+        conversations.append(process_data(datum))
+    return conversations
+
+def download_google_ifeval():
+    """
+     Huggingface: https://huggingface.co/datasets/google/IFEval
+     The dataset contains math and reasoning problems with images. We use the train set here.
+    """
+    print("Starting Download for google/IFEval...")
+    dset = io.huggingface_download("google/IFEval", split="train")
+
+    def process_data(datum):
+        conv = [
+            {
+                "role": "user",
+                "turn": 0,
+                "content": datum.get("prompt", ""),
+                "image": "",
+            }
+        ]
+        return Conversation(
+            conversation_id="ifeval_" + str(uuid.uuid4()).replace("-", ""),
+            dataset_id="ifeval",
+            user_id=None,
+            time=None,
+            model=None,
+            conversation=conv,
+            geography="Unknown"
+        )
+
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing IFEval")]
+
+def download_aime2025():
+    """
+     Huggingface: https://huggingface.co/datasets/opencompass/AIME2025
+     The dataset contains math problems from the AIME 2025 competition. We use the test set here.
+    """
+    print("Starting Download for AIME2025...")
+    dset = load_dataset("opencompass/AIME2025", "AIME2025-II", split="test")
+
+    def process_data(datum):
+        conv = [
+            {
+                "role": "user",
+                "turn": 0,
+                "content": datum.get("question", ""),
+                "image": "",
+            }
+        ]
+        return Conversation(
+            conversation_id="aime2025_" + str(uuid.uuid4()).replace("-", ""),
+            dataset_id="aime2025",
+            user_id=None,
+            time=None,
+            model=None,
+            conversation=conv,
+            geography="Unknown"
+        )
+    
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing AIME2025")]
+
+def download_code_generation_lite():
+    """
+     Huggingface: https://huggingface.co/datasets/livecodebench/code_generation_lite
+     The dataset contains coding problems with starter code and public test cases. We use the test set here.
+    """
+    print("Starting Download for Code Generation Lite...")
+    dset = load_dataset("livecodebench/code_generation_lite", version_tag="release_v5", split = "test", trust_remote_code=True)
+    #Features: ['question_title', 'question_content', 'platform', 'question_id', 'contest_id', 'contest_date', 'starter_code', 'difficulty', 'public_test_cases', 'private_test_cases', 'metadata'],
+    
+    def process_data(datum):
+        conv = [
+            {
+                "role": "user",
+                "turn": 0,
+                "content": datum.get("question_content", "") + "\n\n" + datum.get("starter_code", "") + "\n\n" + "Public Test Cases:\n" + datum.get("public_test_cases", ""),
+                "image": "",
+            }
+        ]
+        return Conversation(
+            conversation_id="codegen_lite_" + str(uuid.uuid4()).replace("-", ""),
+            dataset_id="code_generation_lite",
+            user_id=None,
+            time=None,
+            model=None,
+            conversation=conv,
+            geography="Unknown"
+        )
+    
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing Code Generation Lite")]
+
+def download_drop():
+    """
+     Huggingface: https://huggingface.co/datasets/ucinlp/drop
+     The dataset contains reading comprehension questions. We use the validation set here.
+     """
+    print("Starting Download for DROP (validation set)...")
+    dset = load_dataset("ucinlp/drop", split="validation")
+
+    def process_data(datum):
+        content = f"Passage: {datum.get('passage', '')}\nQuestion: {datum.get('question', '')}"
+        conv = [{
+            "role": "user",
+            "turn": 0,
+            "content": content,
+            "image": ""
+        }]
+        return Conversation(
+            conversation_id="drop_validation_" + str(uuid.uuid4()).replace("-", ""),
+            dataset_id="drop",
+            user_id=None,
+            time=None,
+            model=None,
+            conversation=conv,
+            geography="Unknown"
+        )
+
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing DROP Validation")]
+
+def download_mgsm():
+    """Note: this dataset has the same test set in 11 languages. We combine them all here, and label the language in the conversation_id.Total is 2750 samples.
+    Huggingface: https://huggingface.co/datasets/juletxara/mgsm.
+    """
+    print("Starting Download for MGSM...")
+    languages = ['bn', 'de', 'en', 'es', 'fr', 'ja', 'ru', 'sw', 'te', 'th', 'zh']
+    conversations = []
+    for lang in languages:
+        print(f"Processing language: {lang}")
+        ds = load_dataset("juletxara/mgsm", lang, split="test")
+        for datum in tqdm(ds, desc=f"Processing MGSM {lang}"):
+            conv = [
+                {
+                    "role": "user",
+                    "turn": 0,
+                    "content": datum.get("question", ""),
+                    "image": "",
+                }
+            ]
+            conversations.append(Conversation(
+                conversation_id=f"mgsm_{lang}_" + str(uuid.uuid4()).replace("-", ""),
+                dataset_id="mgsm",
+                user_id=None,
+                time=None,
+                model=None,
+                conversation=conv,
+                geography="Unknown"
+            ))
+    return conversations
+
+def download_multilingual_mmlu():
+    """
+     Huggingface: https://huggingface.co/datasets/openai/MMMLU
+     The dataset contains the same questions in multiple languages. We combine them all here. 
+    """
+    print("Starting Download for Multilingual MMLU...")
+    dset = load_dataset("openai/MMMLU", "default", token=True)["test"] # default contains all languages
+    choice_indicators = ["a)", "b)", "c)", "d)", "e)", "f)", "g)", "h)", "i)", "j)", "k)", "l)", "m)", "n)", "o)", "p)", "q)", "r)", "s)", "t)", "u)", "v)", "w)", "x)", "y)", "z)"]
+
+    def process_data(datum):
+        choices = datum.get("choices", [])[:4]
+        choices_text = " ".join(
+            f"{choice_indicators[i]} {choices[i]}" for i in range(len(choices))
+        )
+        conv = [
+            {
+                "role": "user",
+                "turn": 0,
+                "content": datum.get("question", "") + " " + choices_text,
+                "image": "",
+            }
+        ]
+        return Conversation(
+            conversation_id="multilingual_mmlu_" + str(uuid.uuid4()).replace("-", ""),
+            dataset_id="multilingual_mmlu",
+            user_id=str(uuid.uuid4()).replace("-", ""),
+            time=None,
+            model=None,
+            conversation=conv,
+            geography="Unknown"
+        )
+
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing Multilingual MMLU")]
+
+   
+def download_lmarena_hard():
+    """The huggingface repo for this dataset is https://huggingface.co/datasets/lmarena-ai/arena-hard-auto. There are two problems: 1) one of their JSON files is incorrectly formatted, breaking HF's loading API. 2) The dataset seems to only contain the model answers, not the questions. 
+    To solve this, I found the questions file in their github repo and downloaded it directly in a website request. The repo is here: https://github.com/lmarena/arena-hard-auto/blob/main/data/arena-hard-v2.0/question.jsonl. 
+    """
+    print("Starting Download for lmarena_hard...")
+    url = "https://raw.githubusercontent.com/lmarena/arena-hard-auto/196f6b826783b3da7310e361a805fa36f0be83f3/data/arena-hard-v2.0/question.jsonl"
+    response = requests.get(url)
+    lines = response.text.strip().split("\n")
+    data = [json.loads(line) for line in lines]
+
+    def process_data(datum):
+        conv = [{
+            "role": "user",
+            "turn": 0,
+            "content": datum.get("prompt", ""),
+            "image": ""
+        }]
+        return Conversation(
+            conversation_id="lmarena_hard_" + str(uuid.uuid4()).replace("-", ""),
+            dataset_id="lmarena_hard",
+            user_id=None,
+            time=None,
+            model=None,
+            conversation=conv,
+            geography="Unknown"
+        )
+
+    return [process_data(d) for d in tqdm(data, desc="Processing lmarena_hard")]
+
+def download_codeforces_verifiable_prompts():
+    """This dataset is a bit complicated on huggingface, containing a lot of metadata about the competition, and the official tests of code. 
+    They release a format of their dataset structured for RL prompts, which we use here for ease. It combines the system prompt with the specific problem. 
+    Huggingface: https://huggingface.co/datasets/open-r1/codeforces
+    """
+    print("Starting Download for Codeforces Verifiable Prompts...")
+    dset = load_dataset("open-r1/codeforces", "verifiable-prompts", split="test")
+
+    def process_data(datum):
+        conv = [
+            {
+                "role": "user",
+                "turn": 0,
+                "content": datum.get("prompt", ""),
+                "image": "",
+            }
+        ]
+        return Conversation(
+            conversation_id="codeforces_" + str(uuid.uuid4()).replace("-", ""),
+            dataset_id="codeforces",
+            user_id=None,
+            time=None,
+            model=None,
+            conversation=conv,
+            geography="Unknown"
+        )
+
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing Codeforces Verifiable Prompts")]
+
 DOWNLOAD_FUNCTIONS = {
     "wildchat_v1": download_wildchat_v1,
     "wildchat_private": download_wildchat_private,
@@ -401,7 +855,20 @@ DOWNLOAD_FUNCTIONS = {
     "mmlu": download_mmlu,
     "hle": download_hle, 
     "gpqa": download_gpqa, 
-    "swebench": download_swebench
+    "swebench": download_swebench,
+    "mbpp": download_mbpp,
+    "humaneval": download_humaneval, 
+    "gsm8k": download_gsm8k,
+    "bbh": download_bbh,
+    "mmlupro": download_mmlupro,
+    "ifeval": download_google_ifeval,
+    "aime2025": download_aime2025,
+    'code_gen_lite': download_code_generation_lite,
+    'drop': download_drop, 
+    'mgsm': download_mgsm,
+    'multi_mmlu': download_multilingual_mmlu,
+    'lmarena_hard': download_lmarena_hard,
+    'codeforces': download_codeforces_verifiable_prompts,
 }
 
 
@@ -415,20 +882,22 @@ def download_dataset(
 
     # Download data and optionally sample
     data_download_fn = DOWNLOAD_FUNCTIONS[dataset_id]
+    
     data = data_download_fn()
+
     if sample is not None:
         data = random.sample(data, int(sample))
 
     # Write to file 
-    if save_path_overwrite is not None: 
-        save_path = save_path_overwrite 
+
+    if save_path_overwrite is not None and save_path_overwrite != "": 
+        save_path = save_path_overwrite  
     else: 
-       save_path = f"datasets/{dataset_id}/full.json"
+        save_path = f"datasets/{dataset_id}/full.json"
     
     dset = Dataset(dataset_id=dataset_id, data=data)
     print(f"Saving {len(data)} conversations to {save_path}...")
-    dset.save_to_json(json_path = f"datasets/{dataset_id}/full.json")
-    
+    dset.save_to_json(json_path = save_path)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -441,13 +910,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--sample",
         required=False,
-        default=False,
+        default=None,
         help=f"An integer for how many to sample from the dataset."
     )
     parser.add_argument(
         "--save_path_overwrite",
         required=False,
-        default="",
+        default=None,
         help="By default, Datasets are saved in data/<dataset_id>/full.json for consistency. To define a specific save path instead, provide the full path here."
     )
     args = parser.parse_args()
