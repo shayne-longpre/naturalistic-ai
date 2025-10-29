@@ -316,6 +316,12 @@ def download_mmlu():
                     "turn": 0, 
                     "content": datum.get("question") + " " + " ".join(f"{choice_indiciators[i]} {datum.get("choices")[i]}" for i in range(len(datum.get("choices")))),
                     "image": "",
+                }, 
+                {
+                    "role": "assistant",
+                    "turn": 0, 
+                    "content": datum.get("answer"),
+                    "image": "",
                 }
             ]
 
@@ -338,6 +344,7 @@ def download_mmlu():
     return conversations_to_return
 
 # Download HLE
+# TODO: should we include the rationale? 
 def download_hle():
     """
     Huggingface: https://huggingface.co/datasets/cais/hle
@@ -353,6 +360,12 @@ def download_hle():
                 "turn": 0, 
                 "content": datum.get("question"),
                 "image": datum.get("image") if datum.get("image") else ''
+            }, 
+            {
+                "role": "assistant",
+                "turn": 0, 
+                "content": datum.get("answer"),
+                "image": "",
             }
         ]
         
@@ -369,6 +382,7 @@ def download_hle():
     
     return [process_data(datum) for datum in tqdm(dset, desc="Processing Humanity's Last Exam")]
 
+#TODO: Should we include the explanation?
 # Download GPQA
 def download_gpqa():
     """
@@ -395,6 +409,12 @@ def download_gpqa():
                 "turn": 0, 
                 "content": f"{datum.get('Question')}\nChoices:\n" + "\n".join(choices),
                 "image": '',
+            }, 
+            {
+                "role": "assistant",
+                "turn": 0, 
+                "content": datum.get("Correct Answer"),
+                "image": "",
             }
         ]
         
@@ -429,6 +449,12 @@ def download_swebench():
                 "turn": 0, 
                 "content": f"Problem Statement: {datum.get('problem_statement')} \nRepo: {datum.get('repo')} \nBase_commit: {datum.get('base_commit')} \n",
                 "image": '',
+            }, 
+            {
+                "role": "assistant",
+                "turn": 0, 
+                "content": datum.get("solution"),
+                "image": "",
             }
         ]
         
@@ -448,7 +474,7 @@ def download_swebench():
 # Download MBPP 
 def download_mbpp():
     """
-    Huggingface: https://huggingface.co/datasets/mbpp
+    Huggingface: https://huggingface.co/datasets/Muennighoff/mbpp
     This dataset contains 1000 Python programming problems that are crowd-sourced and designed to be solvable by entry-level programmers.
     """
     print("Starting Download for MBPP...")
@@ -461,6 +487,12 @@ def download_mbpp():
                 "role": "user",
                 "turn": 0,
                 "content": datum.get("text", "") + datum.get("code", ""),
+                "image": "",
+            }, 
+            {
+                "role": "assistant",
+                "turn": 0,
+                "content": datum.get("code", ""),
                 "image": "",
             }
         ]
@@ -493,6 +525,12 @@ def download_humaneval():
                 "role": "user",
                 "turn": 0,
                 "content": datum.get("prompt", ""),
+                "image": "",
+            }, 
+            {
+                "role": "assistant",
+                "turn": 0,
+                "content": datum.get("canonical_solution", ""),
                 "image": "",
             }
         ]
@@ -555,6 +593,12 @@ def download_bbh():
                     "turn": 0,
                     "content": datum.get("input", ""),
                     "image": "",
+                }, 
+                {
+                    "role": "assistant",
+                    "turn": 0,
+                    "content": datum.get("target", ""),
+                    "image": "",
                 }
             ]
             conv = Conversation(
@@ -588,6 +632,12 @@ def download_mmlupro():
                 "turn": 0,
                 "content": question_text + " " + choices_text,
                 "image": "",
+            }, 
+            {
+                "role": "assistant",
+                "turn": 0,
+                "content": datum.get("answer", ""),
+                "image": "",
             }
         ]
         return Conversation(
@@ -609,7 +659,7 @@ def download_mmlupro():
 def download_google_ifeval():
     """
      Huggingface: https://huggingface.co/datasets/google/IFEval
-     The dataset contains math and reasoning problems with images. We use the train set here.
+     This dataset contains around 500 "verifiable instructions" such as "write in more than 400 words" and "mention the keyword of AI at least 3 times" which can be verified by heuristics. 
     """
     print("Starting Download for google/IFEval...")
     dset = io.huggingface_download("google/IFEval", split="train")
@@ -621,7 +671,7 @@ def download_google_ifeval():
                 "turn": 0,
                 "content": datum.get("prompt", ""),
                 "image": "",
-            }
+            }, 
         ]
         return Conversation(
             conversation_id="ifeval_" + str(uuid.uuid4()).replace("-", ""),
@@ -650,6 +700,12 @@ def download_aime2025():
                 "turn": 0,
                 "content": datum.get("question", ""),
                 "image": "",
+            }, 
+            {
+                "role": "assistant",
+                "turn": 0,
+                "content": datum.get("answer", ""),
+                "image": "",
             }
         ]
         return Conversation(
@@ -664,6 +720,7 @@ def download_aime2025():
     
     return [process_data(datum) for datum in tqdm(dset, desc="Processing AIME2025")]
 
+# TODO: The answers here are the private test cases. Should we include them?
 def download_code_generation_lite():
     """
      Huggingface: https://huggingface.co/datasets/livecodebench/code_generation_lite
@@ -679,6 +736,12 @@ def download_code_generation_lite():
                 "role": "user",
                 "turn": 0,
                 "content": datum.get("question_content", "") + "\n\n" + datum.get("starter_code", "") + "\n\n" + "Public Test Cases:\n" + datum.get("public_test_cases", ""),
+                "image": "",
+            }, 
+            {
+                "role": "assistant",
+                "turn": 0,
+                "content": datum.get("private_test_cases", ""),
                 "image": "",
             }
         ]
@@ -709,7 +772,15 @@ def download_drop():
             "turn": 0,
             "content": content,
             "image": ""
-        }]
+        }, 
+        {
+            "role": "assistant",
+            "turn": 0,
+            "content": datum.get("answer_spans", ""),
+            "image": ""
+        }
+        
+        ]
         return Conversation(
             conversation_id="drop_validation_" + str(uuid.uuid4()).replace("-", ""),
             dataset_id="drop",
@@ -738,6 +809,12 @@ def download_mgsm():
                     "role": "user",
                     "turn": 0,
                     "content": datum.get("question", ""),
+                    "image": "",
+                }, 
+                {
+                    "role": "assistant",
+                    "turn": 0,
+                    "content": datum.get("answer", ""),
                     "image": "",
                 }
             ]
@@ -772,6 +849,12 @@ def download_multilingual_mmlu():
                 "turn": 0,
                 "content": datum.get("question", "") + " " + choices_text,
                 "image": "",
+            }, 
+            {
+                "role": "assistant",
+                "turn": 0,
+                "content": datum.get("answer", ""),
+                "image": "",
             }
         ]
         return Conversation(
@@ -786,7 +869,6 @@ def download_multilingual_mmlu():
 
     return [process_data(datum) for datum in tqdm(dset, desc="Processing Multilingual MMLU")]
 
-   
 def download_lmarena_hard():
     """The huggingface repo for this dataset is https://huggingface.co/datasets/lmarena-ai/arena-hard-auto. There are two problems: 1) one of their JSON files is incorrectly formatted, breaking HF's loading API. 2) The dataset seems to only contain the model answers, not the questions. 
     To solve this, I found the questions file in their github repo and downloaded it directly in a website request. The repo is here: https://github.com/lmarena/arena-hard-auto/blob/main/data/arena-hard-v2.0/question.jsonl. 
@@ -803,7 +885,8 @@ def download_lmarena_hard():
             "turn": 0,
             "content": datum.get("prompt", ""),
             "image": ""
-        }]
+        } 
+        ]
         return Conversation(
             conversation_id="lmarena_hard_" + str(uuid.uuid4()).replace("-", ""),
             dataset_id="lmarena_hard",
@@ -815,6 +898,7 @@ def download_lmarena_hard():
         )
 
     return [process_data(d) for d in tqdm(data, desc="Processing lmarena_hard")]
+
 
 def download_codeforces_verifiable_prompts():
     """This dataset is a bit complicated on huggingface, containing a lot of metadata about the competition, and the official tests of code. 
@@ -830,6 +914,12 @@ def download_codeforces_verifiable_prompts():
                 "role": "user",
                 "turn": 0,
                 "content": datum.get("prompt", ""),
+                "image": "",
+            }, 
+            {
+                "role": "assistant",
+                "turn": 0,
+                "content": datum.get("official_tests", "") + datum.get("editorial" , ""),
                 "image": "",
             }
         ]
