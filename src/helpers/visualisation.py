@@ -8,11 +8,13 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from tabulate import tabulate
 from collections import Counter, defaultdict
+import plotly.graph_objects as go
+import plotly.express as px
 
 sys.path.append("./")
 
 from src.helpers.constants import FUNCTION_ANNOTATION_LABEL_ABBREVIATIONS
-
+from src.helpers.dataset_comparison import aggregate_counts_by_category, group_counts_into_parent_categories
 
 def barplot_distribution(
     data: typing.Union[typing.Dict[str, int], typing.Dict[str, typing.Dict[str, int]]],
@@ -429,3 +431,248 @@ def plot_differences_for_group(
         for k, v in metrics.items():
             print(f"   {k}: {v}")
         print("-" * 50)
+
+
+
+def make_tree_plot(category_counts: typing.Dict[str, int], parent_dict: typing.Dict[str:str], save_path:str=None, split_lines_display:bool=False, print_counts:bool=False):
+    """
+    Create a treemap visualization using Plotly to show hierarchical category distributions.
+    Args:
+        category_counts (dict): Dictionary with category names as keys and their counts as values.
+        parent_dict (dict): Dictionary mapping parent categories to lists of their child categories.
+        save_path (str, optional): If provided, save the treemap image to this path
+        split_lines_display (bool): If True, split long category labels into multiple lines for better display.
+        print_counts (bool): If True, print out the counts for each label for debugging purposes
+    Returns:
+        values (list): List of counts corresponding to each label.
+        parents (list): List of parent labels corresponding to each label.
+        labels (list): List of all labels (both parents and children).
+        fig (plotly.graph_objects.Figure): The Plotly treemap figure object.
+
+    Example dictionaries as input:
+    category_counts = {
+        'Apples': 150,
+        'Bananas': 100,
+        'Broccoli': 80,
+        }
+    parent_dict = {
+        'Fruits': ['Apples', 'Bananas'],
+        'Vegetables': ['Broccoli'],
+        }
+
+    """
+    labels = []
+    parents = []
+    values = []
+
+    # If desired, replace any commas in child labels with <br> for better display in Plotly. This breaks up a long label into multiple lines. 
+    def format_label(label):
+        label = label.replace(',', '')
+        label = label.replace('/', '')
+        return label.replace(' ', '<br>')#.replace('&', '<br>&')
+
+    # Prepare formatted parent_dict for label mapping (only format children)
+    if split_lines_display:
+        formatted_parent_dict = {parent: [format_label(child) for child in children] for parent, children in parent_dict.items()}
+
+    # Use formatted labels for all further processing
+    labels = []
+    parents = []
+    values = []
+
+    # Build a reverse mapping from subcategory to parent (with formatted child labels)
+    child_to_parent = {}
+    for parent, children in formatted_parent_dict.items():
+        for child in children:
+            child_to_parent[child] = parent
+
+    # Find which parents have at least one child in category_counts (to avoid plotting empy boxes)
+    parents_with_children = set()
+    for cat in category_counts:
+        formatted_cat = format_label(cat)
+        parent = child_to_parent.get(formatted_cat)
+        if parent is not None:
+            parents_with_children.add(parent)
+
+    # Add only those parent nodes to the labels, parents, and values lists
+    for parent in parents_with_children:
+        labels.append(parent)
+        parents.append('')
+        values.append(0)
+
+    # Add all categories in category_counts (children)
+    for cat, count in category_counts.items():
+        formatted_cat = format_label(cat)
+        parent = child_to_parent.get(formatted_cat)
+        if parent is not None:
+            labels.append(formatted_cat)
+            parents.append(parent)
+            values.append(count)
+        else:
+            print(f"Warning: Category '{cat}' has no parent in parent_dict. Skipping it.") 
+    
+    #For debugging, print out the counts for each label.
+    if print_counts:
+        for lbl, val in zip(labels, values):
+            print(f"{lbl}: {val}")
+
+    # Create the treemap figure
+    fig = go.Figure(go.Treemap(
+        labels=labels,
+        parents=parents,
+        values=values,
+        textinfo="label+percent entry",
+    ))
+    
+    fig.update_traces(textfont_size=20)
+    fig.update_layout(width=2000, height=1400)
+  
+    if save_path is not None:
+        fig.write_image(save_path)
+
+    return values, parents, labels, fig
+
+
+def make_spider_plot(data_to_compare, parent_dict = None, title = "", save_path = None):
+    """
+    This function takes in a dictionary of the category counts from 1+ datasets, whose values are plotted in a spider plot and named according to the key. 
+    If desired, a parent_dict can be applied to aggregate the categories into more abstract groups. 
+    If desired, a title can be specified. 
+
+    Example Input: 
+    data_to_compare = {
+        'dataset1': {'apples': 19, 'bananas: 42, 'broccoli': 10}, 
+        'dataset2': {'apples': 27, 'bananas: 21, 'broccoli: 12 }, 
+    }
+    parent_dict = {
+        'fruits': ['apples', 'bananas'], 
+        'vegetables': ['broccoli'],
+    }
+    title = "Dataset 1 vs Dataset 2, Amount of Fruits and Vegetables "
+
+    """
+
+    categories =list(next(iter(data_to_compare.values())).keys())
+    
+    if parent_dict is not None:
+        grouped_data_to_compare = {
+            name: group_counts_into_parent_categories(count_dict, parent_dict=parent_dict)
+            for name, count_dict in data_to_compare.items()
+        }
+        # Use the keys from the first dataset in grouped_data_to_compare for categories
+        categories = list(next(iter(grouped_data_to_compare.values())).keys())
+        data_to_compare = grouped_data_to_compare
+
+
+    # Remove categories where all datasets have 0 occurrences
+    categories_to_keep = [
+        cat for cat in categories
+        if any(data_to_compare[ds].get(cat, 0) > 0 for ds in data_to_compare)
+    ]
+    categories = categories_to_keep
+
+    # Prepare values for each dataset
+    values_to_plot = {}
+
+    for dataset_name, agg_wc in data_to_compare.items():
+        print(f"Processing dataset: {dataset_name}")
+        values = [agg_wc.get(cat, 0) for cat in categories]
+        if len(values) >= 1:
+            values += [values[0]]  # Close the loop for the radar plot
+        values_to_plot[dataset_name] = values
+
+    # Make scatterpolar 
+    fig = go.Figure(
+        data=[ 
+            go.Scatterpolar(
+                r=v,
+                theta=categories,
+                fill='toself',
+                name=k
+            ) for k, v in values_to_plot.items()
+        ]
+    )
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True)
+        ),
+        title=f"{title}",
+        showlegend=True,
+        width=1500,
+        height=800
+    )
+    fig.show()
+    if save_path is not None: 
+        fig.write_image(save_path)
+
+    return fig
+
+def make_heatmap(comparisons:dict[str:dict[str:int]], baseline:dict[str:int], title:str, save_path:str = None, fig_width:int = 800):
+    """
+    This function produces a heatmap used plot the difference of several datasets to a single baseline. Each row represents a dataset and each column represents a category. 
+    The value plotted in the heatmap is the numerical difference between the comparion datasets' value for that category and the baseline's value for that category. 
+
+    Inputs:  
+    Comparisons is a dictionary structured as name => dictionary of categories and counts. Each item in this dictionary represents a row of the heatmap. 
+    The baseline is a single dictionary of categories to counts. The baseline's keys (categories) are used throughout. 
+    Each row will be titled by the name in the comparisons dict automatically, and the figure is titled with the title string provided. 
+    
+    """
+    all_keys = set(baseline.keys()) # these will each be a column
+    for comp_dict in comparisons.values():
+        all_keys.update(comp_dict.keys())
+
+    # Ensure all dicts have all keys, fill missing with 0
+    baseline = {k: baseline.get(k, 0) for k in sorted(all_keys)}
+    for name in comparisons:
+        comparisons[name] = {k: comparisons[name].get(k, 0) for k in sorted(all_keys)}
+
+    # Create a matrix where each row is the difference between a comparison dict and the baselin
+    z = []
+    names = []
+    for name, comp in comparisons.items():
+        diff = {k: (comp[k] - baseline[k] ) for k in baseline.keys()}
+        z.append([diff[k] for k in sorted(diff.keys())])
+        names.append(name)
+
+
+    # Colorscale for range -2000 to 2000, with 0 as grey
+    colorscale = [
+        [0.0, "darkblue"],        # -2000
+        [0.4, "lightsteelblue"], # -1000
+        [0.5, "lightgrey"],       # 0
+        [0.9, "salmon"],         # +1000
+        [1.0, "red"]              # +2000
+    ]
+
+    fig = px.imshow(
+        z,
+        text_auto=True,
+        x=sorted(baseline.keys()),
+        y=names,
+        color_continuous_scale=colorscale,
+        zmin=-1000,
+        zmax=1000
+    )
+
+    fig.update_layout(coloraxis_colorscale=colorscale)
+    fig.update_xaxes(tickangle=0)
+    fig.update_xaxes(
+        ticktext=[
+            label.replace(' and ', ' and<br>').replace('&', '&<br>') if 'and' in label else label.replace('&', '&<br>')
+            for label in fig.layout.xaxis.ticktext or fig.data[0].x
+        ],
+        tickvals=list(range(len(fig.data[0].x)))
+    )
+    fig.update_xaxes(title_font=dict(size=24))
+    fig.update_yaxes(title_font=dict(size=24))
+    fig.update_layout(
+        width=fig_width,
+        height=600
+    )
+    fig.update_layout(title_text=title, title_x=0.5)
+    fig.update_layout(xaxis_side="top")
+    if save_path:
+        fig.write_image(save_path)
+
+    fig.show()
