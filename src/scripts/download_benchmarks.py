@@ -264,7 +264,7 @@ def download_alpaca_eval():
             }, 
             {
                 "role": "assistant",
-                "turn": 0, 
+                "turn": 1, 
                 "content": datum.get("output"),
                 "image": "",
             }
@@ -272,7 +272,7 @@ def download_alpaca_eval():
 
         
         return Conversation(
-            conversation_id="alpaca_eval" + str(uuid.uuid4()),
+            conversation_id="alpaca_eval" + str(uuid.uuid4()).replace("-", ""),
             dataset_id="alpaca_eval",
             user_id=str(uuid.uuid4()),
             time=None,
@@ -307,20 +307,22 @@ def download_mmlu():
             "professional_accounting", "professional_law", "professional_medicine", "professional_psychology",
             "public_relations", "security_studies", "sociology", "us_foreign_policy", "virology", "world_religions"
         ]
-    choice_indiciators = ["a)", "b)", "c)", "d)", "e)", "f)", "g)", "h)", "i)", "j)", "k)", "l)", "m)", "n)", "o)", "p)", "q)", "r)", "s)", "t)", "u)", "v)", "w)", "x)", "y)", "z)"]
-
+    choice_indicators = ["a)", "b)", "c)", "d)", "e)", "f)", "g)", "h)", "i)", "j)", "k)", "l)", "m)", "n)", "o)", "p)", "q)", "r)", "s)", "t)", "u)", "v)", "w)", "x)", "y)", "z)"]
     def process_data(datum):
+            choices = datum.get("choices")
+           
+        
             conv = [
                 {
                     "role": "user",
                     "turn": 0, 
-                    "content": datum.get("question") + " " + " ".join(f"{choice_indiciators[i]} {datum.get("choices")[i]}" for i in range(len(datum.get("choices")))),
+                    "content": datum.get("question") + " " + " ".join(f"{choice_indicators[i]} {datum.get("choices")[i]}" for i in range(len(datum.get("choices")))),
                     "image": "",
                 }, 
                 {
                     "role": "assistant",
-                    "turn": 0, 
-                    "content": datum.get("answer"),
+                    "turn": 1, 
+                    "content": choice_indicators[datum.get("answer")] +" " + choices[datum.get("answer")],  # a) <answer>
                     "image": "",
                 }
             ]
@@ -363,7 +365,7 @@ def download_hle():
             }, 
             {
                 "role": "assistant",
-                "turn": 0, 
+                "turn": 1, 
                 "content": datum.get("answer"),
                 "image": "",
             }
@@ -382,7 +384,6 @@ def download_hle():
     
     return [process_data(datum) for datum in tqdm(dset, desc="Processing Humanity's Last Exam")]
 
-#TODO: Should we include the explanation?
 # Download GPQA
 def download_gpqa():
     """
@@ -412,7 +413,7 @@ def download_gpqa():
             }, 
             {
                 "role": "assistant",
-                "turn": 0, 
+                "turn": 1, 
                 "content": datum.get("Correct Answer"),
                 "image": "",
             }
@@ -452,7 +453,7 @@ def download_swebench():
             }, 
             {
                 "role": "assistant",
-                "turn": 0, 
+                "turn": 1, 
                 "content": datum.get("solution"),
                 "image": "",
             }
@@ -469,7 +470,7 @@ def download_swebench():
             geography="Unknown"
         )
     
-    return [process_data(datum) for datum in tqdm(dset, desc="Processing GPQA")]
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing SweBench")]
 
 # Download MBPP 
 def download_mbpp():
@@ -478,7 +479,7 @@ def download_mbpp():
     This dataset contains 1000 Python programming problems that are crowd-sourced and designed to be solvable by entry-level programmers.
     """
     print("Starting Download for MBPP...")
-    # Download the MBPP dataset using the io helper (assumes the dataset is hosted on Hugging Face)
+  
     dset = io.huggingface_download("mbpp", split="test")
     
     def process_data(datum):
@@ -491,7 +492,7 @@ def download_mbpp():
             }, 
             {
                 "role": "assistant",
-                "turn": 0,
+                "turn": 1,
                 "content": datum.get("code", ""),
                 "image": "",
             }
@@ -529,7 +530,7 @@ def download_humaneval():
             }, 
             {
                 "role": "assistant",
-                "turn": 0,
+                "turn": 1,
                 "content": datum.get("canonical_solution", ""),
                 "image": "",
             }
@@ -596,7 +597,7 @@ def download_bbh():
                 }, 
                 {
                     "role": "assistant",
-                    "turn": 0,
+                    "turn": 1,
                     "content": datum.get("target", ""),
                     "image": "",
                 }
@@ -624,8 +625,10 @@ def download_mmlupro():
     def process_data(datum):
         # Construct the question string with choices similar to the MMLU script.
         question_text = datum.get("question", "")
-        choices = datum.get("choices", [])
+        choices = datum.get("options", [])
+        print(len(choices))
         choices_text = " ".join(f"{choice_indicators[i]} {choices[i]}" for i in range(len(choices)))
+        print(datum.get("answer_index"))
         conv = [
             {
                 "role": "user",
@@ -635,8 +638,8 @@ def download_mmlupro():
             }, 
             {
                 "role": "assistant",
-                "turn": 0,
-                "content": datum.get("answer", ""),
+                "turn": 1,
+                "content": choice_indicators[datum.get("answer_index")] +" " + choices[datum.get("answer_index")],  # a) <answer>
                 "image": "",
             }
         ]
@@ -703,7 +706,7 @@ def download_aime2025():
             }, 
             {
                 "role": "assistant",
-                "turn": 0,
+                "turn":  1,
                 "content": datum.get("answer", ""),
                 "image": "",
             }
@@ -735,12 +738,12 @@ def download_code_generation_lite():
             {
                 "role": "user",
                 "turn": 0,
-                "content": datum.get("question_content", "") + "\n\n" + datum.get("starter_code", "") + "\n\n" + "Public Test Cases:\n" + datum.get("public_test_cases", ""),
+                "content": datum.get("question_content", "") + "\n\n" + datum.get("question_content", "") + "\n\n" + datum.get("starter_code", "") + "\n\n" + "Public Test Cases:\n" + datum.get("public_test_cases", ""),
                 "image": "",
             }, 
             {
                 "role": "assistant",
-                "turn": 0,
+                "turn": 1,
                 "content": datum.get("private_test_cases", ""),
                 "image": "",
             }
@@ -767,6 +770,9 @@ def download_drop():
 
     def process_data(datum):
         content = f"Passage: {datum.get('passage', '')}\nQuestion: {datum.get('question', '')}"
+        answer = datum.get("answer_spans", "")["spans"][0]
+   
+
         conv = [{
             "role": "user",
             "turn": 0,
@@ -775,8 +781,8 @@ def download_drop():
         }, 
         {
             "role": "assistant",
-            "turn": 0,
-            "content": datum.get("answer_spans", ""),
+            "turn": 1,
+            "content": answer,
             "image": ""
         }
         
@@ -803,7 +809,9 @@ def download_mgsm():
     for lang in languages:
         print(f"Processing language: {lang}")
         ds = load_dataset("juletxara/mgsm", lang, split="test")
+
         for datum in tqdm(ds, desc=f"Processing MGSM {lang}"):
+
             conv = [
                 {
                     "role": "user",
@@ -813,8 +821,8 @@ def download_mgsm():
                 }, 
                 {
                     "role": "assistant",
-                    "turn": 0,
-                    "content": datum.get("answer", ""),
+                    "turn": 1,
+                    "content": datum.get("answer_number", ""),
                     "image": "",
                 }
             ]
@@ -836,24 +844,33 @@ def download_multilingual_mmlu():
     """
     print("Starting Download for Multilingual MMLU...")
     dset = load_dataset("openai/MMMLU", "default", token=True)["test"] # default contains all languages
-    choice_indicators = ["a)", "b)", "c)", "d)", "e)", "f)", "g)", "h)", "i)", "j)", "k)", "l)", "m)", "n)", "o)", "p)", "q)", "r)", "s)", "t)", "u)", "v)", "w)", "x)", "y)", "z)"]
+    choice_indicators = ["A", "B", "C", "D"]    
 
     def process_data(datum):
-        choices = datum.get("choices", [])[:4]
+        choices = {
+            "A": datum.get("A"), 
+            "B": datum.get("B"), 
+            "C": datum.get("C"), 
+            "D": datum.get("D")
+        }
+
         choices_text = " ".join(
-            f"{choice_indicators[i]} {choices[i]}" for i in range(len(choices))
+            f'{c}) {choices[c]}' for c in choice_indicators
         )
+        # print(choices_text)
+        # print(datum.get("Answer"))
+        # print(choices[datum.get("Answer")])
         conv = [
             {
                 "role": "user",
                 "turn": 0,
-                "content": datum.get("question", "") + " " + choices_text,
+                "content": datum.get("Question", "") + " " + choices_text,
                 "image": "",
             }, 
             {
                 "role": "assistant",
-                "turn": 0,
-                "content": datum.get("answer", ""),
+                "turn": 1,
+                "content": datum.get("Answer", "") +") " + choices[datum.get("Answer", "")],
                 "image": "",
             }
         ]
@@ -918,7 +935,7 @@ def download_codeforces_verifiable_prompts():
             }, 
             {
                 "role": "assistant",
-                "turn": 0,
+                "turn": 1,
                 "content": datum.get("official_tests", "") + datum.get("editorial" , ""),
                 "image": "",
             }
@@ -935,31 +952,110 @@ def download_codeforces_verifiable_prompts():
 
     return [process_data(datum) for datum in tqdm(dset, desc="Processing Codeforces Verifiable Prompts")]
 
+def download_math():
+    """
+    Huggingface: https://huggingface.co/datasets/qwedsacf/competition_math
+    Loads competition_math which contains keys "problem" and "solution".
+    """
+    print("Starting Download for Competition Math...")
+    dset = io.huggingface_download("qwedsacf/competition_math", split="train")
+
+    def process_data(datum):
+        conv = [
+            {
+                "role": "user",
+                "turn": 0,
+                "content": datum.get("problem", ""),
+                "image": "",
+            },
+            {
+                "role": "assistant",
+                "turn": 1,
+                "content": datum.get("solution", ""),
+                "image": "",
+            },
+        ]
+
+        return Conversation(
+            conversation_id="math_" + str(uuid.uuid4()).replace("-", ""),
+            dataset_id="math",
+            user_id=None,
+            time=None,
+            model=None,
+            conversation=conv,
+            geography="Unknown",
+        )
+
+    return [process_data(datum) for datum in tqdm(dset, desc="Processing Competition Math (MATH)")]
+    
+def download_math500():
+    """
+    Huggingface: https://huggingface.co/datasets/HuggingFaceH4/MATH-500
+    MATH-500 contains math problems with keys "problem" and "solution".
+    """
+    print("Starting Download for MATH-500...")
+    dset = io.huggingface_download("HuggingFaceH4/MATH-500", split="test")
+
+    def process_data(datum):
+        conv = [
+            {
+                "role": "user",
+                "turn": 0,
+                "content": datum.get("problem", ""),
+                "image": "",
+            },
+            {
+                "role": "assistant",
+                "turn": 1,
+                "content": datum.get("solution", ""),
+                "image": "",
+            },
+        ]
+        return Conversation(
+            conversation_id="math500_" + str(uuid.uuid4()).replace("-", ""),
+            dataset_id="math500",
+            user_id=None,
+            time=None,
+            model=None,
+            conversation=conv,
+            geography="Unknown",
+        )
+
+    return [process_data(d) for d in tqdm(dset, desc="Processing MATH-500")]
+
 DOWNLOAD_FUNCTIONS = {
+    # Usage / Conversation Datasets
     "wildchat_v1": download_wildchat_v1,
     "wildchat_private": download_wildchat_private,
     "lmsys_1m": download_lmsys_1m,
     "sharegpt_v1": download_sharegpt_v1,
     "chatbot_arena": download_chatbot_arena,
-    "alpaca_eval": download_alpaca_eval,
+
+    # Benchmark Datasets Used in At least 5 Releases in 2024 and 2025. 
     "mmlu": download_mmlu,
-    "hle": download_hle, 
-    "gpqa": download_gpqa, 
-    "swebench": download_swebench,
-    "mbpp": download_mbpp,
+    "mbbpp": download_mbpp,
     "humaneval": download_humaneval, 
     "gsm8k": download_gsm8k,
-    "bbh": download_bbh,
-    "mmlupro": download_mmlupro,
+    "math": download_math, 
+    "bbh": download_bbh, 
+    "gpqa": download_gpqa, 
+    "mmlupro": download_mmlupro,    
     "ifeval": download_google_ifeval,
+    "math-500": download_math500,
     "aime2025": download_aime2025,
-    'code_gen_lite': download_code_generation_lite,
-    'drop': download_drop, 
-    'mgsm': download_mgsm,
-    'multi_mmlu': download_multilingual_mmlu,
-    'lmarena_hard': download_lmarena_hard,
-    'codeforces': download_codeforces_verifiable_prompts,
+    "code_gen_lite": download_code_generation_lite,
+    "drop": download_drop, 
+    "mgsm": download_mgsm,
+    "multi_mmlu": download_multilingual_mmlu,
+    "lmarena_hard": download_lmarena_hard,
+    "codeforces": download_codeforces_verifiable_prompts,
+   
+    #Other Common Benchmarks
+    "swebench": download_swebench,
+    "hle": download_hle, 
+    "alpaca_eval": download_alpaca_eval,
 }
+
 
 
 def download_dataset(
@@ -967,7 +1063,7 @@ def download_dataset(
     sample: int = None,
     save_path_overwrite: str = None, 
 ):
-    # Check args 
+    
     assert dataset_id in DOWNLOAD_FUNCTIONS, f"{dataset_id} not in {DOWNLOAD_FUNCTIONS.keys()}"
 
     # Download data and optionally sample
@@ -983,7 +1079,7 @@ def download_dataset(
     if save_path_overwrite is not None and save_path_overwrite != "": 
         save_path = save_path_overwrite  
     else: 
-        save_path = f"datasets/{dataset_id}/full.json"
+        save_path = f"dataset_downloads/{dataset_id}/full.json"
     
     dset = Dataset(dataset_id=dataset_id, data=data)
     print(f"Saving {len(data)} conversations to {save_path}...")
@@ -1011,4 +1107,3 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     download_dataset(args.dataset_id, args.sample, args.save_path_overwrite)
-    # download_dataset(args.dataset_id, args.sample, args.dataset_folder, args.save_path_overwrite)
