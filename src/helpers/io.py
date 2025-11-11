@@ -20,6 +20,7 @@ import numpy as np
 
 import requests
 from datasets import Dataset, load_dataset
+from huggingface_hub import HfFolder
 
 # import src.helpers.constants as constants
 # from . import constants
@@ -163,14 +164,23 @@ def huggingface_download(
     assert not (data_dir and data_files)
 
     # num_proc = max(multiprocessing.cpu_count() // 2, 1)
+    # if no huggingface token is found locally, require auth token. 
+    try: 
+        token = HfFolder.get_token()
+    except ImportError:
+        token = None
+
+    auth_params = {}
+    if not token:
+        auth_params["use_auth_token"] = True
     if data_files:
-        dset = load_dataset(data_address, data_files=data_files, use_auth_token=True)
+        dset = load_dataset(data_address, data_files=data_files, **auth_params)
     elif data_dir:
-        dset = load_dataset(data_address, data_dir=data_dir, use_auth_token=True)
+        dset = load_dataset(data_address, data_dir=data_dir, **auth_params)
     elif name:
-        dset = load_dataset(data_address, name, use_auth_token=True)
+        dset = load_dataset(data_address, name, **auth_params)
     else:
-        dset = load_dataset(data_address, use_auth_token=True)
+        dset = load_dataset(data_address, **auth_params)
 
     if split:
         dset = dset[split]

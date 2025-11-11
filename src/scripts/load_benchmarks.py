@@ -20,7 +20,21 @@ DATASET_LOCATIONS = {
     "hle": "datasets/hle/full.json",
     "gpqa": "datasets/gpqa/full.json",
     "swebench": "datasets/swebench/full.json",
+    "mbpp": "datasets/mbpp/full.json",
+    "humaneval": "datasets/humaneval/full.json", 
+    "gsm8k": "datasets/gsm8k/full.json",
+    "bbh": "datasets/bbh/full.json",
+    "mmlupro": "datasets/mmlupro/full.json",
+    "ifeval": "datasets/ifeval/full.json",
+    "aime2025": "datasets/aime2025/full.json",
+    "code_gen_lite": "datasets/code_gen_lite/full.json",
+    "drop": "datasets/drop/full.json", 
+    "mgsm": "datasets/mgsm/full.json",
+    "multi_mmlu": "datasets/multi_mmlu/full.json",
+    "lmarena_hard": "datasets/lmarena_hard/full.json",
+    "codeforces": "datasets/codeforces/full.json",
 }
+
 DATASET_CATEGORIES = {
     ### User Datasets ###
     "wildchat_v1": "conversation",
@@ -35,6 +49,19 @@ DATASET_CATEGORIES = {
     "hle": "benchmark",
     "gpqa": "benchmark",
     "swebench": "benchmark",
+    "mbpp": "benchmark",
+    "humaneval": "benchmark",
+    "gsm8k": "benchmark",
+    "bbh": "benchmark",
+    "mmlupro": "benchmark",        
+    "ifeval": "benchmark",
+    "aime2025": "benchmark",
+    "code_gen_lite": "benchmark",
+    "drop": "benchmark",
+    "mgsm": "benchmark",
+    "multi_mmlu": "benchmark",
+    "lmarena_hard": "benchmark",
+    "codeforces": "benchmark",
     
 }
 DATASET_SIZES = {
@@ -51,6 +78,19 @@ DATASET_SIZES = {
     "hle": 2700,
     "gpqa": 546,
     "swebench": 2294,
+    'mbpp': 9005,
+    'humaneval': 2957,
+    'gsm8k': 23747,
+    'bbh': 12371,
+    'mmlupro': 216581,
+    'ifeval': 9743,
+    'aime2025': 275,
+    'code_gen_lite': 15845,
+    'drop': 171635,
+    'mgsm': 49505,
+    'multi_mmlu': 3538589,
+    'lmarena_hard': 13505,
+    'codeforces': 15197
 }
 
 def filter_by_id(ids: list[str]):
