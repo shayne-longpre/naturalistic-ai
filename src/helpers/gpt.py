@@ -43,9 +43,9 @@ class GPT(object):
         self.top_p = top_p
         self.disable_token_counting = disable_token_counting
         if self.disable_token_counting:
-            print("Token counting is disabled.")
+            print("🔢 Token counting is disabled.")
         else:
-            print("Token counting is enabled.")
+            print("🔢 Token counting is enabled.")
 
         self.SYSTEM_PROMPT = prompt
 
@@ -74,11 +74,11 @@ class GPT(object):
             load_dotenv(dotenv_path='data/.env')
             openai.api_key = os.environ[var]
             openai.api_base = base_url
-            print("API key and base_url successfully loaded!")
+            print("✅ API key and Base URL successfully loaded!")
         except KeyError:
-            print(f"Error: {var} environment variable is not set.")
+            print(f"⚠️ Error: {var} environment variable is not set.")
         except openai.error.AuthenticationError:
-            print("Error: Incorrect API key.")
+            print("⚠️ Error: Incorrect API key.")
 
     # def load_prompt_from_json(self):
     #     """Loads a specific prompt from a JSON file based on a provided key, defaults to 'scraping-policy' prompt.
@@ -133,7 +133,7 @@ class GPT(object):
             try:
                 encoding = tiktoken.encoding_for_model(self.model)
             except:
-                print(f"[Warning] No tokenizer found for model '{self.model}', using 'o200k_base' as fallback.")
+                print(f"⚠️ [Warning] No tokenizer found for model '{self.model}', using 'o200k_base' as fallback.")
                 encoding = tiktoken.get_encoding("o200k_base")
             token_count = len(encoding.encode(text))
             return token_count
@@ -266,13 +266,13 @@ class GPT(object):
             if prompt_id in self.cache:
                 self.token_usage["cached_input_tokens"] += input_token_count  # Cached input tokens
                 responses.append(self.cache[prompt_id])
-                print(f"Using cached response for prompt ID: {prompt_id}")
+                # print(f"Using cached response for prompt ID: {prompt_id}")
             else:
                 self.token_usage["input_tokens"] += input_token_count  # Normal input tokens
                 if is_message_list:
                     task = asyncio.create_task(self.make_openai_request_async(session, messages_list=formatted_prompt))
                 else:
-                    task = asyncio.create_task(self.make_openai_request_async(session, formatted_prompt=formatted_prompt))
+                    task = asyncio.create_task(self.make_openai_request_async(session, final_prompt=formatted_prompt))
                 tasks.append((prompt_id, task))
 
         api_responses = await asyncio.gather(*(task[1] for task in tasks))
@@ -292,10 +292,12 @@ class GPT(object):
         model = self.model.lower()
         if 'gpt-4o' in model:
             self._estimate_cost_4o()
+        elif 'gpt-4.1' in model:
+            self._estimate_cost_41()
         elif 'gpt-3.5' in model or 'o3-mini' in model:
             self._estimate_cost_o3()
         else:
-            print(f"No cost estimator defined for model: {self.model}")
+            print(f"⚠️ No cost estimator defined for model: {self.model}")
     
     def _estimate_cost_4o(self):
         input_cost = (self.token_usage["input_tokens"] / 1_000_000) * 2.50
@@ -303,11 +305,23 @@ class GPT(object):
         output_cost = (self.token_usage["output_tokens"] / 1_000_000) * 10.00
         total_cost = input_cost + cached_input_cost + output_cost
 
-        print("\n-----------Estimated Cost (gpt-4o)-----------")
-        print(f"  Input Cost: ${input_cost:.4f}")
-        print(f"  Cached Input Cost: ${cached_input_cost:.4f}")
-        print(f"  Output Cost: ${output_cost:.4f}")
-        print(f"  Total Cost: ${total_cost:.4f}\n")
+        print("\n", "="*20, "💸 Estimated Cost (GPT-4o) 💸", "="*20)
+        print(f"  🤑 Input Cost: ${input_cost:.4f}")
+        print(f"  🤑 Cached Input Cost: ${cached_input_cost:.4f}")
+        print(f"  🤑 Output Cost: ${output_cost:.4f}")
+        print(f"  🤑 Total Cost: ${total_cost:.4f}\n")
+    
+    def _estimate_cost_41(self):
+        input_cost = (self.token_usage["input_tokens"] / 1_000_000) * 2.00
+        cached_input_cost = (self.token_usage["cached_input_tokens"] / 1_000_000) * 0.50
+        output_cost = (self.token_usage["output_tokens"] / 1_000_000) * 8.00
+        total_cost = input_cost + cached_input_cost + output_cost
+
+        print("\n", "="*20, "💸 Estimated Cost (GPT-4.1) 💸", "="*20)
+        print(f"  🤑 Input Cost: ${input_cost:.4f}")
+        print(f"  🤑 Cached Input Cost: ${cached_input_cost:.4f}")
+        print(f"  🤑 Output Cost: ${output_cost:.4f}")
+        print(f"  🤑 Total Cost: ${total_cost:.4f}\n")
 
     def _estimate_cost_o3(self):
         input_cost = (self.token_usage["input_tokens"] / 1_000_000) * 1.10
@@ -315,11 +329,11 @@ class GPT(object):
         output_cost = (self.token_usage["output_tokens"] / 1_000_000) * 4.40
         total_cost = input_cost + cached_input_cost + output_cost
 
-        print("\n-----------Estimated Cost (gpt-o3-mini)-----------")
-        print(f"  Input Cost: ${input_cost:.4f}")
-        print(f"  Cached Input Cost: ${cached_input_cost:.4f}")
-        print(f"  Output Cost: ${output_cost:.4f}")
-        print(f"  Total Cost: ${total_cost:.4f}\n")
+        print("\n", "="*20, "💸 Estimated Cost (GPT-o3) 💸", "="*20)
+        print(f"  🤑 Input Cost: ${input_cost:.4f}")
+        print(f"  🤑 Cached Input Cost: ${cached_input_cost:.4f}")
+        print(f"  🤑 Output Cost: ${output_cost:.4f}")
+        print(f"  🤑 Total Cost: ${total_cost:.4f}\n")
 
 
     async def process_prompts_in_batches_async(
@@ -348,7 +362,7 @@ class GPT(object):
                 try:
                     batch_responses = await self.process_batch_async(session, batch_prompts)
                 except Exception as e:
-                    print(f"Skipping batch due to error: {e}")  # Log the error but continue processing
+                    print(f"⚠️ [Error] Skipping batch due to error: {e}")  # Log the error but continue processing
                     continue  # Move to the next batch
                 parsed_responses = []
                 for response in batch_responses:
@@ -358,7 +372,7 @@ class GPT(object):
                             parsed_response = json.loads(response)
                             parsed_responses.append(parsed_response)
                         except json.JSONDecodeError as e:
-                            print("Failed to parse response:", response, "Error:", e)  # debugging output
+                            print("⚠️ [Error] Failed to parse response:", response, "Error:", e)  # debugging output
                             parsed_responses.append(response)  # append the unparsed response if parsing fails
                     else:
                         parsed_responses.append(response)

@@ -74,8 +74,8 @@ def format_conversation_turns_free(conversation, args):
     for i in range(0, len(conversation) - 1, 2):
         user_turn = conversation[i]
         assistant_turn = conversation[i + 1] if i + 1 < len(conversation) else None
-        if user_turn["role"] == "user" or user_turn["role"] == "human" and assistant_turn and assistant_turn["role"] == "assistant" or assistant_turn["role"] == "gpt":
-            pairs.append((user_turn["content"], assistant_turn["content"]))
+        if user_turn["role"] == "user" or user_turn["role"] == "human" and assistant_turn and assistant_turn["role"] == "assistant" or assistant_turn["role"] == "gpt" or assistant_turn["role"] == "system":
+            pairs.append((user_turn["content"], assistant_turn["content"][:500]))
             turn_ids.append(user_turn["turn"])
 
     formatted_turns = []
@@ -106,8 +106,8 @@ def format_conversation_turns_json(conversation, args):
     for i in range(0, len(conversation) - 1, 2):
         user_turn = conversation[i]
         assistant_turn = conversation[i + 1] if i + 1 < len(conversation) else None
-        if user_turn["role"] == "user" or user_turn["role"] == "human" and assistant_turn and assistant_turn["role"] == "assistant" or assistant_turn["role"] == "gpt":
-            pairs.append((user_turn["content"], assistant_turn["content"]))
+        if user_turn["role"] == "user" or user_turn["role"] == "human" and assistant_turn and assistant_turn["role"] == "assistant" or assistant_turn["role"] == "gpt" or assistant_turn["role"] == "system":
+            pairs.append((user_turn["content"], assistant_turn["content"][:500]))
             turn_ids.append(user_turn["turn"])
 
     formatted_turns = []
@@ -148,8 +148,8 @@ def format_conversation_turns_free_multi_hist(conversation, args, max_prev_chars
     for i in range(0, len(conversation) - 1, 2):
         user_turn = conversation[i]
         assistant_turn = conversation[i + 1] if i + 1 < len(conversation) else None
-        if user_turn["role"] in ["user", "human"] and assistant_turn and assistant_turn["role"] in ["assistant", "gpt"]:
-            pairs.append((user_turn["content"], assistant_turn["content"]))
+        if user_turn["role"] in ["user", "human"] and assistant_turn and assistant_turn["role"] in ["assistant", "gpt", "system"]:
+            pairs.append((user_turn["content"], assistant_turn["content"][:500]))
             turn_ids.append(user_turn["turn"])
 
     formatted_turns = []
@@ -193,12 +193,18 @@ def format_conversation_turns_free_multi_hist(conversation, args, max_prev_chars
 def format_conversation_turns_json_multi_hist(conversation, args, max_prev_chars=100000):
     pairs = []
     turn_ids = []
-    for i in range(0, len(conversation) - 1, 2):
-        user_turn = conversation[i]
-        assistant_turn = conversation[i + 1] if i + 1 < len(conversation) else None
-        if user_turn["role"] in ["user", "human"] and assistant_turn and assistant_turn["role"] in ["assistant", "gpt"]:
-            pairs.append((user_turn["content"], assistant_turn["content"]))
+    if "gsm8k" in args.save or "ifeval" in args.save or "lmarena_hard" in args.save:
+        user_turn = conversation[0]
+        if user_turn["role"] in ["user", "human"]:
+            pairs.append((user_turn["content"], ""))
             turn_ids.append(user_turn["turn"])
+    else:
+        for i in range(0, len(conversation) - 1, 2):
+            user_turn = conversation[i]
+            assistant_turn = conversation[i + 1] if i + 1 < len(conversation) else None
+            if user_turn["role"] in ["user", "human"] and assistant_turn and assistant_turn["role"] in ["assistant", "gpt", "system"]:
+                pairs.append((user_turn["content"], assistant_turn["content"][:500]))
+                turn_ids.append(user_turn["turn"])
 
     formatted_turns = []
     for i in range(len(pairs)):
@@ -256,7 +262,7 @@ def extract_samples_and_metadata(args, dataframe, existing_pairs):
 
     for _, row in dataframe.iterrows():
         conversation = row["conversation"]
-        ex_id_base = row["ex_id"]
+        ex_id_base = row["conversation_id"]
 
         if len(conversation) > 20:
             conversation = conversation[:20]
@@ -277,19 +283,23 @@ def extract_samples_and_metadata(args, dataframe, existing_pairs):
                 raise ValueError("input_format needs to be either 'json' or 'free'.")
 
         # Assign suffix if already annotated before
-        if (ex_id_base, 0) in existing_pairs or ex_id_base in seen_ex_ids:
-            # Add suffix
-            suffix_idx = ex_id_suffix_counter[ex_id_base]
-            suffix = string.ascii_lowercase[suffix_idx]
-            ex_id = f"{ex_id_base}_{suffix}"
-            ex_id_suffix_counter[ex_id_base] += 1
-        else:
-            ex_id = ex_id_base
+        # if (ex_id_base, 0) in existing_pairs or ex_id_base in seen_ex_ids:
+        #     # Add suffix
+        #     suffix_idx = ex_id_suffix_counter[ex_id_base]
+        #     suffix = string.ascii_lowercase[suffix_idx]
+        #     ex_id = f"{ex_id_base}_{suffix}"
+        #     ex_id_suffix_counter[ex_id_base] += 1
+        # else:
+        #     ex_id = ex_id_base
+        ex_id = ex_id_base
 
         seen_ex_ids.add(ex_id)
 
+        # for i, (prev_text, curr_text, turn_id) in enumerate(formatted_pairs):
+        #     if (ex_id, i) in existing_pairs:
+        #         continue
         for i, (prev_text, curr_text, turn_id) in enumerate(formatted_pairs):
-            if (ex_id, i) in existing_pairs:
+            if (ex_id, turn_id) in existing_pairs:
                 continue
 
             include_prev = not ("None" in prev_text or i == 0)
@@ -301,7 +311,7 @@ def extract_samples_and_metadata(args, dataframe, existing_pairs):
 
             sample.append(prompt)
             metadata.append({
-                "ex_id": ex_id,  # suffixed version
+                "conversation_id": ex_id,  # suffixed version
                 "order": i,
                 "turn": turn_id,
                 "dataset_id": row["dataset_id"],
@@ -315,13 +325,17 @@ def extract_samples_and_metadata(args, dataframe, existing_pairs):
 
 
 async def run_gpt(args, batch_size=1):
-    existing_ex_ids = load_existing_exid_turn_pairs(args.save)   
-    dataframe = pd.read_json(args.input, orient="records")
+    existing_ex_ids = load_existing_exid_turn_pairs(args.save) 
+    with open(args.input, "r") as f:
+        raw_json = json.load(f)
+    data = raw_json["data"]
+    dataframe = pd.DataFrame(data)  
+    # dataframe = pd.read_json(args.input, orient="records")
     formatted_prompts, metadata, order_ids, turn_ids = extract_samples_and_metadata(args, dataframe, existing_ex_ids)
-    print(f"Formatted prompts: {len(formatted_prompts)}, Metadata: {len(metadata)}")
+    print(f"☝️ Formatted prompts: {len(formatted_prompts)}, Metadata: {len(metadata)}")
     
     if not formatted_prompts:
-        print("All examples already exist in the save file.")
+        print("✅ All examples already exist in the save file.")
         return
 
     gpt_instance = gpt.GPT(model=args.model_id, prompt=args.prompt_id, cache_id=args.version)
@@ -335,16 +349,18 @@ async def run_gpt(args, batch_size=1):
         try:
             batch_responses = await gpt_instance.process_prompts_in_batches_async(batch)
         except Exception as e:
-            print(f"Error processing batch: {e}")
+            print(f"⚠️ [Error] Processing batch: {e}")
             continue
         
         batch_output = []
-        print("Prompt: ", batch[0])
+        print("="*50, "✍️ Prompt ✍️", "="*50)
+        print(batch[0])
         for response, meta, order_id, turn_id in zip(batch_responses, meta_batch, order_id_batch, turn_id_batch):
-            print("Response: ", response)
+            print("="*50, "👾 Response 👾", "="*50)
+            print(response)
 
             if response is None:
-                print(f"[Error] Skipping saving due to failed response for order {order_id}, turn {turn_id}, ex_id: {meta['ex_id']}")
+                print(f"⚠️ [Error] Skipping saving due to failed response for order {order_id}, turn {turn_id}, ex_id: {meta['ex_id']}")
                 with open(args.save.replace('.jsonl', '-failed.jsonl'), 'a') as f:
                     f.write(json.dumps({
                         **meta,
